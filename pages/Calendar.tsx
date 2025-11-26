@@ -5,6 +5,8 @@ import { MapPin, Calendar as CalIcon, ChevronLeft, ChevronRight } from 'lucide-r
 import { dataService } from '../services/dataService';
 import { Event } from '../types';
 
+// ... (Garder EventCard et VisualCalendar identiques au code précédent, je réimplémente le composant principal) ...
+
 const EventCard: React.FC<{ event: Event }> = ({ event }) => (
   <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 flex flex-col h-full border border-gray-100 animate-fade-in-up">
     <div className="h-48 overflow-hidden relative">
@@ -34,16 +36,12 @@ const EventCard: React.FC<{ event: Event }> = ({ event }) => (
 );
 
 const VisualCalendar: React.FC<{ events: Event[] }> = ({ events }) => {
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 9, 1)); // Defaulting to Oct 2025 where events are
+  const [currentDate, setCurrentDate] = useState(new Date(2025, 9, 1));
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 is Sunday
-  
-  // Adjust for Monday start (0 = Mon, 6 = Sun)
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
   const startDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
-
   const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
   const getDayEvents = (day: number) => {
@@ -66,13 +64,11 @@ const VisualCalendar: React.FC<{ events: Event[] }> = ({ events }) => {
           <button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded-full"><ChevronRight size={20}/></button>
         </div>
       </div>
-      
       <div className="grid grid-cols-7 gap-2 mb-2">
         {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => (
           <div key={d} className="text-center text-sm font-semibold text-gray-400 py-2">{d}</div>
         ))}
       </div>
-      
       <div className="grid grid-cols-7 gap-2">
         {Array.from({ length: startDay }).map((_, i) => (
           <div key={`empty-${i}`} className="h-24 bg-gray-50/50 rounded-lg"></div>
@@ -81,7 +77,6 @@ const VisualCalendar: React.FC<{ events: Event[] }> = ({ events }) => {
           const day = i + 1;
           const dayEvents = getDayEvents(day);
           const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
-          
           return (
             <div key={day} className={`h-24 border rounded-lg p-2 relative transition-colors hover:border-bde-rose/50 ${isToday ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'}`}>
               <span className={`text-sm font-semibold ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>{day}</span>
@@ -104,7 +99,11 @@ const CalendarPage = () => {
   const [events, setEvents] = useState<Event[]>([]);
 
   useEffect(() => {
-    setEvents(dataService.getEvents());
+    const fetchEvents = async () => {
+        const data = await dataService.getEvents();
+        setEvents(data);
+    };
+    fetchEvents();
   }, []);
 
   const upcomingEvents = events.filter(e => e.status === 'upcoming');
@@ -113,19 +112,14 @@ const CalendarPage = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
-      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-16 animate-fade-in-up">
           <h1 className="text-4xl font-bold text-bde-navy mb-4">Agenda des Activités</h1>
           <p className="text-gray-600 max-w-2xl mx-auto">
-            Retrouvez tous les événements marquants de l'année scolaire. Conférences, sport, fêtes et ateliers.
+            Retrouvez tous les événements marquants de l'année scolaire.
           </p>
         </div>
-
-        {/* Visual Calendar */}
         <VisualCalendar events={events} />
-
-        {/* Upcoming */}
         <section className="mb-16 animate-fade-in-up" style={{animationDelay: '0.2s'}}>
           <h2 className="text-2xl font-bold text-bde-navy mb-8 flex items-center gap-3">
             <span className="w-2 h-8 bg-bde-rose rounded-full"></span>
@@ -137,12 +131,10 @@ const CalendarPage = () => {
             </div>
           ) : (
             <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
-              <p className="text-gray-500">Aucun événement prévu pour le moment.</p>
+              <p className="text-gray-500">Aucun événement prévu.</p>
             </div>
           )}
         </section>
-
-        {/* Past */}
         <section className="animate-fade-in-up" style={{animationDelay: '0.4s'}}>
           <h2 className="text-2xl font-bold text-gray-400 mb-8 flex items-center gap-3">
             <span className="w-2 h-8 bg-gray-300 rounded-full"></span>
@@ -153,7 +145,6 @@ const CalendarPage = () => {
           </div>
         </section>
       </div>
-
       <Footer />
     </div>
   );

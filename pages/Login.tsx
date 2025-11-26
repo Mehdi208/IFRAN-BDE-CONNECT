@@ -2,21 +2,44 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User, ShieldCheck } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import { auth } from '../firebaseConfig';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 const Login = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simple mock authentication
-    if (username === 'admin' && password === 'admin') {
-      localStorage.setItem('isAuthenticated', 'true');
-      navigate('/admin/dashboard');
-    } else {
-      setError('Identifiants incorrects (Essayez: admin / admin)');
+    setIsLoading(true);
+    setError('');
+
+    try {
+        if (auth) {
+            // Firebase Auth
+            await signInWithEmailAndPassword(auth, email, password);
+            navigate('/admin/dashboard');
+        } else {
+            // Fallback Mock Auth
+            if (email === 'admin' && password === 'admin') {
+                localStorage.setItem('isAuthenticated', 'true');
+                navigate('/admin/dashboard');
+                // Force reload to update context in mock mode
+                window.location.reload(); 
+            } else {
+                throw new Error('Identifiants incorrects (Mode Mock: admin / admin)');
+            }
+        }
+    } catch (err: any) {
+        setError(err.message || 'Échec de la connexion');
+        if (err.code === 'auth/invalid-credential') {
+            setError('Email ou mot de passe incorrect.');
+        }
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -32,7 +55,7 @@ const Login = () => {
                </div>
             </div>
             <h2 className="text-2xl font-bold text-gray-800">Espace Administrateur</h2>
-            <p className="text-gray-500 text-sm mt-2">Veuillez vous authentifier pour accéder au tableau de bord</p>
+            <p className="text-gray-500 text-sm mt-2">Veuillez vous authentifier</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -43,17 +66,17 @@ const Login = () => {
             )}
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Identifiant</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email / Identifiant</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <User size={18} className="text-gray-400" />
                 </div>
                 <input
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition"
-                  placeholder="admin"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose outline-none transition"
+                  placeholder="admin@ifran.ci"
                   required
                 />
               </div>
@@ -69,7 +92,7 @@ const Login = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition"
+                  className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose outline-none transition"
                   placeholder="••••••"
                   required
                 />
@@ -78,9 +101,10 @@ const Login = () => {
 
             <button
               type="submit"
-              className="w-full bg-bde-navy hover:bg-blue-900 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-blue-900/20"
+              disabled={isLoading}
+              className="w-full bg-bde-navy hover:bg-blue-900 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-70"
             >
-              Se connecter
+              {isLoading ? 'Connexion...' : 'Se connecter'}
             </button>
           </form>
           

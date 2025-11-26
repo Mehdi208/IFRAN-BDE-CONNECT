@@ -3,43 +3,51 @@ import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
 import { Student, Event, Club } from '../../types';
 import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
-import { Calendar } from 'lucide-react';
+import { Calendar, Database } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  // Date Range State (Defaults to current year/school year)
-  const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), 8, 1).toISOString().split('T')[0]); // Sept 1st
-  const [endDate, setEndDate] = useState(new Date(new Date().getFullYear() + 1, 6, 30).toISOString().split('T')[0]); // July 30th next year
+  // Date Range State
+  const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), 8, 1).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date(new Date().getFullYear() + 1, 6, 30).toISOString().split('T')[0]);
 
   useEffect(() => {
-    setStudents(dataService.getStudents());
-    setEvents(dataService.getEvents());
-    setClubs(dataService.getClubs());
+    const loadData = async () => {
+        setLoading(true);
+        const [s, e, c] = await Promise.all([
+            dataService.getStudents(),
+            dataService.getEvents(),
+            dataService.getClubs()
+        ]);
+        setStudents(s);
+        setEvents(e);
+        setClubs(c);
+        setLoading(false);
+    };
+    loadData();
   }, []);
+
+  const handleSeed = async () => {
+      if(confirm("Voulez-vous remplir la base de données Firebase avec les données de test ?")) {
+          await dataService.seedDatabase();
+          window.location.reload();
+      }
+  };
 
   // Filter Data based on Date Range
   const filteredData = useMemo(() => {
     const start = new Date(startDate);
     const end = new Date(endDate);
-    // Include end date fully
     end.setHours(23, 59, 59, 999);
 
     const filteredStudents = students.filter(s => {
-      if (!s.hasPaid || !s.paymentDate) return true; // Include unpaid for stats, filter paid by date
+      if (!s.hasPaid || !s.paymentDate) return true;
       const pDate = new Date(s.paymentDate);
       return pDate >= start && pDate <= end;
     });
@@ -59,9 +67,7 @@ const AdminDashboard = () => {
     };
   }, [startDate, endDate, students, events]);
 
-  // Chart Data Generators
   const getBarData = () => {
-    // Group payments by month within the range
     const data: Record<string, number> = {};
     filteredData.paidStudents.forEach(s => {
       if (s.paymentDate) {
@@ -70,18 +76,13 @@ const AdminDashboard = () => {
         data[key] = (data[key] || 0) + (s.amount || 0);
       }
     });
-
     return Object.keys(data).map(key => ({ name: key, amount: data[key] }));
   };
 
   const getPieData = () => {
     const paid = filteredData.paidStudents.length;
-    // For unpaid, we count total students minus paid (simplified logic)
     const unpaid = students.length - paid; 
-    
-    // Prevent empty chart
     if (paid === 0 && unpaid === 0) return [{ name: 'Aucune donnée', value: 1 }];
-
     return [
       { name: 'Payé', value: paid },
       { name: 'Non Payé', value: unpaid },
@@ -89,11 +90,10 @@ const AdminDashboard = () => {
   };
 
   const COLORS = ['#10B981', '#E74A67', '#CBD5E1'];
-  
-  // Common input style
   const dateInputStyle = "bg-bde-navy text-white border border-gray-600 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-bde-rose outline-none";
-
   const unpaidCount = students.length - filteredData.paidStudents.length;
+
+  if (loading) return <AdminLayout><div className="p-10 text-center">Chargement des données...</div></AdminLayout>;
 
   return (
     <AdminLayout>
@@ -103,24 +103,31 @@ const AdminDashboard = () => {
           <p className="text-gray-500">Vue d'ensemble sur la période sélectionnée</p>
         </div>
         
-        <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-200 flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 px-2">
-            <Calendar size={16} className="text-gray-400"/>
-            <span className="text-sm font-medium text-gray-600">Période :</span>
-          </div>
-          <input 
-            type="date" 
-            value={startDate} 
-            onChange={(e) => setStartDate(e.target.value)}
-            className={dateInputStyle}
-          />
-          <span className="text-gray-400">-</span>
-          <input 
-            type="date" 
-            value={endDate} 
-            onChange={(e) => setEndDate(e.target.value)}
-            className={dateInputStyle}
-          />
+        <div className="flex gap-4">
+             {/* Dev Button to Seed DB */}
+            <button onClick={handleSeed} className="text-xs flex items-center gap-1 bg-gray-200 hover:bg-gray-300 px-2 rounded text-gray-700" title="Remplir la BDD (Dev)">
+                <Database size={12} /> Init DB
+            </button>
+
+            <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-200 flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 px-2">
+                <Calendar size={16} className="text-gray-400"/>
+                <span className="text-sm font-medium text-gray-600">Période :</span>
+            </div>
+            <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
+                className={dateInputStyle}
+            />
+            <span className="text-gray-400">-</span>
+            <input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)}
+                className={dateInputStyle}
+            />
+            </div>
         </div>
       </div>
 
@@ -148,7 +155,6 @@ const AdminDashboard = () => {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8">
-        {/* Cotisations Chart */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-bold text-gray-800 mb-6">Évolution des Cotisations</h3>
           <div className="h-64">
@@ -167,7 +173,6 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Payment Status Chart */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-bold text-gray-800 mb-6">État Global des paiements</h3>
           <div className="h-64">

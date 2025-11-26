@@ -1,6 +1,8 @@
+import { db } from '../firebaseConfig';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { Club, Event, Member, Mentor, Student } from '../types';
 
-// Mock Data
+// --- MOCK DATA (Fallback) ---
 export const MOCK_MEMBERS: Member[] = [
   { id: '1', name: 'Méhdi Traoré', role: 'Président', photoUrl: 'https://ui-avatars.com/api/?name=Mehdi+Traore&background=0F1E3A&color=fff', whatsapp: '2250789609672' },
   { id: '2', name: 'Poste Vacant', role: 'Vice-président', photoUrl: 'https://ui-avatars.com/api/?name=VP&background=eee&color=999', whatsapp: '225' },
@@ -93,43 +95,139 @@ export const MOCK_MENTORS: Mentor[] = [
   { id: '2', name: 'Koman Othniel', subject: 'Développement Web', whatsapp: '2250767842730' },
 ];
 
-// Local Storage Helpers to simulate persistence
+// Helper pour le mode Mock (LocalStorage)
 const getFromStorage = <T,>(key: string, defaultData: T): T => {
-  const stored = localStorage.getItem(key);
+  const stored = localStorage.getItem(key + '_v2');
   if (stored) return JSON.parse(stored);
   return defaultData;
 };
 
 const saveToStorage = (key: string, data: any) => {
-  localStorage.setItem(key, JSON.stringify(data));
+  localStorage.setItem(key + '_v2', JSON.stringify(data));
 };
 
+// --- DATA SERVICE ---
+
+const isFirebaseReady = !!db;
+
 export const dataService = {
-  getMembers: () => getFromStorage('members', MOCK_MEMBERS),
-  saveMembers: (members: Member[]) => saveToStorage('members', members),
+  // --- STUDENTS ---
+  getStudents: async (): Promise<Student[]> => {
+    if (isFirebaseReady) {
+        try {
+            const querySnapshot = await getDocs(collection(db, "students"));
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+        } catch (e) { console.error(e); return getFromStorage('students', MOCK_STUDENTS); }
+    }
+    return new Promise(resolve => resolve(getFromStorage('students', MOCK_STUDENTS)));
+  },
+  saveStudents: async (students: Student[]) => {
+    if (isFirebaseReady) {
+        // En mode réel, on devrait sauvegarder un par un ou utiliser un batch, 
+        // mais ici on simule l'interface existante.
+        // Pour simplifier l'hybridation, on met juste à jour localStorage pour l'instant
+        // ou on implémente la logique d'ajout/modif unitaire dans les composants.
+    }
+    saveToStorage('students', students);
+  },
+  // Nouvelles méthodes atomiques pour Firebase
+  addStudent: async (student: Omit<Student, 'id'>) => {
+    if (isFirebaseReady) {
+        await addDoc(collection(db, "students"), student);
+    } else {
+        const current = getFromStorage('students', MOCK_STUDENTS);
+        saveToStorage('students', [...current, { ...student, id: Date.now().toString() }]);
+    }
+  },
+  updateStudent: async (student: Student) => {
+    if (isFirebaseReady) {
+        await updateDoc(doc(db, "students", student.id), { ...student });
+    } else {
+        const current = getFromStorage('students', MOCK_STUDENTS);
+        saveToStorage('students', current.map((s: Student) => s.id === student.id ? student : s));
+    }
+  },
+  deleteStudent: async (id: string) => {
+    if (isFirebaseReady) {
+        await deleteDoc(doc(db, "students", id));
+    } else {
+        const current = getFromStorage('students', MOCK_STUDENTS);
+        saveToStorage('students', current.filter((s: Student) => s.id !== id));
+    }
+  },
 
-  getClubs: () => getFromStorage('clubs', MOCK_CLUBS),
-  saveClubs: (clubs: Club[]) => saveToStorage('clubs', clubs),
+  // --- EVENTS ---
+  getEvents: async (): Promise<Event[]> => {
+    if (isFirebaseReady) {
+        try {
+            const qs = await getDocs(collection(db, "events"));
+            return qs.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        } catch(e) { return getFromStorage('events', MOCK_EVENTS); }
+    }
+    return new Promise(resolve => resolve(getFromStorage('events', MOCK_EVENTS)));
+  },
+  saveEvents: async (events: Event[]) => saveToStorage('events', events), // Deprecated for atomics
+  addEvent: async (event: Omit<Event, 'id'>) => {
+      if(isFirebaseReady) await addDoc(collection(db, "events"), event);
+      else {
+          const current = getFromStorage('events', MOCK_EVENTS);
+          saveToStorage('events', [...current, { ...event, id: Date.now().toString() }]);
+      }
+  },
+  updateEvent: async (event: Event) => {
+      if(isFirebaseReady) await updateDoc(doc(db, "events", event.id), { ...event });
+      else {
+          const current = getFromStorage('events', MOCK_EVENTS);
+          saveToStorage('events', current.map((e: Event) => e.id === event.id ? event : e));
+      }
+  },
+  deleteEvent: async (id: string) => {
+      if(isFirebaseReady) await deleteDoc(doc(db, "events", id));
+      else {
+          const current = getFromStorage('events', MOCK_EVENTS);
+          saveToStorage('events', current.filter((e: Event) => e.id !== id));
+      }
+  },
 
-  getEvents: () => getFromStorage('events', MOCK_EVENTS),
-  saveEvents: (events: Event[]) => saveToStorage('events', events),
-
-  getStudents: () => getFromStorage('students', MOCK_STUDENTS),
-  saveStudents: (students: Student[]) => saveToStorage('students', students),
+  // --- CLUBS ---
+  getClubs: async (): Promise<Club[]> => {
+    if (isFirebaseReady) {
+        try {
+            const qs = await getDocs(collection(db, "clubs"));
+            return qs.docs.map(doc => ({ id: doc.id, ...doc.data() } as Club));
+        } catch(e) { return getFromStorage('clubs', MOCK_CLUBS); }
+    }
+    return new Promise(resolve => resolve(getFromStorage('clubs', MOCK_CLUBS)));
+  },
+  saveClubs: async (clubs: Club[]) => saveToStorage('clubs', clubs),
   
+  // --- MEMBERS ---
+  getMembers: async (): Promise<Member[]> => {
+    if (isFirebaseReady) {
+        try {
+            const qs = await getDocs(collection(db, "members"));
+            return qs.docs.map(doc => ({ id: doc.id, ...doc.data() } as Member));
+        } catch(e) { return getFromStorage('members', MOCK_MEMBERS); }
+    }
+    return new Promise(resolve => resolve(getFromStorage('members', MOCK_MEMBERS)));
+  },
+  saveMembers: async (members: Member[]) => saveToStorage('members', members),
+
   getMentors: () => MOCK_MENTORS,
 
-  getStats: () => {
-    const students = getFromStorage('students', MOCK_STUDENTS);
-    const clubs = getFromStorage('clubs', MOCK_CLUBS);
-    const events = getFromStorage('events', MOCK_EVENTS);
-    const paidCount = students.filter((s: Student) => s.hasPaid).length;
+  // Fonction utilitaire pour peupler la BDD Firebase la première fois
+  seedDatabase: async () => {
+    if (!isFirebaseReady) return alert("Firebase non configuré !");
     
-    return {
-      totalStudents: students.length,
-      totalCollected: paidCount * 15000,
-      activeClubs: clubs.length,
-      eventsCount: events.length
-    };
+    // Seed Events
+    for (const e of MOCK_EVENTS) { await addDoc(collection(db, "events"), e); }
+    // Seed Clubs
+    for (const c of MOCK_CLUBS) { await addDoc(collection(db, "clubs"), c); }
+    // Seed Students
+    for (const s of MOCK_STUDENTS) { await addDoc(collection(db, "students"), s); }
+    // Seed Members
+    for (const m of MOCK_MEMBERS) { await addDoc(collection(db, "members"), m); }
+    
+    alert("Base de données initialisée avec les données de test !");
   }
 };

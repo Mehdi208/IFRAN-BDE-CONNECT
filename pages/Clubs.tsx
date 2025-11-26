@@ -9,13 +9,16 @@ const Clubs = () => {
   const [clubs, setClubs] = useState<Club[]>([]);
 
   useEffect(() => {
-    setClubs(dataService.getClubs());
+    const fetchClubs = async () => {
+        const data = await dataService.getClubs();
+        setClubs(data);
+    };
+    fetchClubs();
   }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
-      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-16 animate-fade-in-up">
           <h1 className="text-4xl font-bold text-bde-navy mb-4">Vie Associative</h1>
