@@ -9,16 +9,14 @@ const Clubs = () => {
   const [clubs, setClubs] = useState<Club[]>([]);
 
   useEffect(() => {
-    const fetchClubs = async () => {
-        const data = await dataService.getClubs();
-        setClubs(data);
-    };
-    fetchClubs();
+    const load = async () => setClubs(await dataService.fetchClubs());
+    load();
   }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
+      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-16 animate-fade-in-up">
           <h1 className="text-4xl font-bold text-bde-navy mb-4">Vie Associative</h1>
@@ -31,25 +29,25 @@ const Clubs = () => {
           {clubs.map((club, idx) => (
             <div 
               key={club.id} 
-              className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100 flex flex-col animate-fade-in-up"
+              className="group bg-white rounded-2xl p-8 shadow-sm hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 flex flex-col animate-fade-in-up"
               style={{ animationDelay: `${idx * 0.1}s` }}
             >
               <div className="flex items-start justify-between mb-6">
-                <div className="bg-blue-50 p-4 rounded-xl">
-                  <Users className="text-bde-navy w-8 h-8" />
+                <div className="bg-blue-50 group-hover:bg-bde-navy transition-colors duration-300 p-4 rounded-xl shadow-inner">
+                  <Users className="text-bde-navy group-hover:text-white transition-colors duration-300 w-8 h-8" />
                 </div>
                 <span className="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full">Actif</span>
               </div>
               
-              <h2 className="text-2xl font-bold text-bde-navy mb-3">{club.name}</h2>
+              <h2 className="text-2xl font-bold text-bde-navy mb-3 group-hover:text-bde-rose transition-colors">{club.name}</h2>
               <p className="text-gray-600 mb-6 flex-1">{club.description}</p>
               
               <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="bg-gray-50 group-hover:bg-white border border-transparent group-hover:border-gray-200 p-4 rounded-lg transition-colors">
                   <h3 className="text-sm font-semibold text-gray-500 mb-2 uppercase tracking-wider">Activités principales</h3>
                   <div className="flex flex-wrap gap-2">
                     {club.activities.map((activity, idx) => (
-                      <span key={idx} className="bg-white border border-gray-200 text-gray-700 text-xs px-2 py-1 rounded">
+                      <span key={idx} className="bg-white group-hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs px-2 py-1 rounded transition-colors">
                         {activity}
                       </span>
                     ))}
@@ -65,7 +63,7 @@ const Clubs = () => {
                     href={`https://wa.me/${club.leaderWhatsapp}`} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm"
+                    className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-all shadow-md hover:shadow-lg hover:scale-105 text-sm"
                   >
                     <MessageCircle size={16} />
                     Contacter

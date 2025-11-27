@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, User, ShieldCheck } from 'lucide-react';
+import { Lock, User, ShieldCheck, AlertCircle } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { auth } from '../firebaseConfig';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -9,37 +9,43 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError('');
+    setLoading(true);
 
-    try {
-        if (auth) {
-            // Firebase Auth
-            await signInWithEmailAndPassword(auth, email, password);
+    // Vérification si Firebase Auth est configuré
+    if (!auth) {
+        // Fallback mode démo si Firebase mal configuré
+        if (email === 'admin' && password === 'admin') {
+            localStorage.setItem('isAuthenticated', 'true');
             navigate('/admin/dashboard');
         } else {
-            // Fallback Mock Auth
-            if (email === 'admin' && password === 'admin') {
-                localStorage.setItem('isAuthenticated', 'true');
-                navigate('/admin/dashboard');
-                // Force reload to update context in mock mode
-                window.location.reload(); 
-            } else {
-                throw new Error('Identifiants incorrects (Mode Mock: admin / admin)');
-            }
+            setError("Firebase Auth non configuré. En mode démo, utilisez admin/admin.");
         }
+        setLoading(false);
+        return;
+    }
+
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        // Si succès
+        localStorage.setItem('isAuthenticated', 'true');
+        navigate('/admin/dashboard');
     } catch (err: any) {
-        setError(err.message || 'Échec de la connexion');
-        if (err.code === 'auth/invalid-credential') {
+        console.error("Erreur login:", err);
+        if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
             setError('Email ou mot de passe incorrect.');
+        } else if (err.code === 'auth/too-many-requests') {
+            setError('Trop de tentatives. Veuillez patienter.');
+        } else {
+            setError('Erreur de connexion. Vérifiez votre connexion internet.');
         }
     } finally {
-        setIsLoading(false);
+        setLoading(false);
     }
   };
 
@@ -55,28 +61,29 @@ const Login = () => {
                </div>
             </div>
             <h2 className="text-2xl font-bold text-gray-800">Espace Administrateur</h2>
-            <p className="text-gray-500 text-sm mt-2">Veuillez vous authentifier</p>
+            <p className="text-gray-500 text-sm mt-2">Veuillez vous authentifier pour accéder au tableau de bord</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
             {error && (
-              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center border border-red-100">
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center border border-red-100 flex items-center justify-center gap-2">
+                <AlertCircle size={16} />
                 {error}
               </div>
             )}
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email / Identifiant</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <User size={18} className="text-gray-400" />
                 </div>
                 <input
-                  type="text"
+                  type="text" // Type text pour permettre "admin" en fallback, sinon "email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose outline-none transition"
-                  placeholder="admin@ifran.ci"
+                  className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition"
+                  placeholder="utilisateur@exemple.com"
                   required
                 />
               </div>
@@ -92,7 +99,7 @@ const Login = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose outline-none transition"
+                  className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition"
                   placeholder="••••••"
                   required
                 />
@@ -101,10 +108,14 @@ const Login = () => {
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full bg-bde-navy hover:bg-blue-900 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-70"
+              disabled={loading}
+              className="w-full bg-bde-navy hover:bg-blue-900 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-70 disabled:cursor-not-allowed flex justify-center"
             >
-              {isLoading ? 'Connexion...' : 'Se connecter'}
+              {loading ? (
+                <span className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              ) : (
+                'Se connecter'
+              )}
             </button>
           </form>
           

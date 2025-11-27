@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -9,16 +10,14 @@ const Team = () => {
   const [members, setMembers] = useState<Member[]>([]);
 
   useEffect(() => {
-    const loadMembers = async () => {
-        const data = await dataService.getMembers();
-        setMembers(data);
-    };
-    loadMembers();
+    const load = async () => setMembers(await dataService.fetchMembers());
+    load();
   }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
+      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-16 animate-fade-in-up">
           <h1 className="text-4xl font-bold text-bde-navy mb-4">Le Bureau 2025-2026</h1>

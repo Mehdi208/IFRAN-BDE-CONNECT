@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Shield, MessageCircle, ExternalLink, ArrowRight } from 'lucide-react';
+import { MapPin, Shield, MessageCircle, ExternalLink } from 'lucide-react';
 
 const Footer = () => {
   const usefulLinks = [
@@ -29,10 +29,15 @@ const Footer = () => {
               <br />
               <span className="text-white font-medium mt-2 block">Vision 2025-2026.</span>
             </p>
-            <div className="flex items-center gap-2 text-sm bg-white/5 px-4 py-2 rounded-full border border-white/10">
-              <MapPin size={16} className="text-bde-rose" />
+            <a 
+              href="https://maps.app.goo.gl/12mRGf3kFN6ddRW78"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm bg-white/5 px-4 py-2 rounded-full border border-white/10 hover:bg-white/10 hover:border-bde-rose/50 transition-colors group"
+            >
+              <MapPin size={16} className="text-bde-rose group-hover:scale-110 transition-transform" />
               <span>Campus IFRAN, Abidjan</span>
-            </div>
+            </a>
           </div>
 
           {/* COL 2: Navigation */}
@@ -41,10 +46,26 @@ const Footer = () => {
                Navigation Rapide
             </h3>
             <ul className="space-y-3 w-full max-w-xs flex flex-col items-center">
-                <li className="w-full"><Link to="/calendar" className="flex items-center justify-center gap-2 hover:text-bde-rose transition-colors group py-1"><ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-bde-rose"/> Agenda des activités</Link></li>
-                <li className="w-full"><Link to="/clubs" className="flex items-center justify-center gap-2 hover:text-bde-rose transition-colors group py-1"><ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-bde-rose"/> Les Clubs étudiants</Link></li>
-                <li className="w-full"><Link to="/team" className="flex items-center justify-center gap-2 hover:text-bde-rose transition-colors group py-1"><ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-bde-rose"/> Membres du Bureau</Link></li>
-                <li className="w-full"><Link to="/tutoring" className="flex items-center justify-center gap-2 hover:text-bde-rose transition-colors group py-1"><ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-bde-rose"/> Programme de Tutorat</Link></li>
+                <li className="w-full">
+                  <Link to="/calendar" className="block text-center hover:text-bde-rose transition-colors py-1 hover:scale-105 transform duration-200">
+                    Agenda des activités
+                  </Link>
+                </li>
+                <li className="w-full">
+                  <Link to="/clubs" className="block text-center hover:text-bde-rose transition-colors py-1 hover:scale-105 transform duration-200">
+                    Les Clubs étudiants
+                  </Link>
+                </li>
+                <li className="w-full">
+                  <Link to="/team" className="block text-center hover:text-bde-rose transition-colors py-1 hover:scale-105 transform duration-200">
+                    Membres du Bureau
+                  </Link>
+                </li>
+                <li className="w-full">
+                  <Link to="/tutoring" className="block text-center hover:text-bde-rose transition-colors py-1 hover:scale-105 transform duration-200">
+                    Programme de Tutorat
+                  </Link>
+                </li>
             </ul>
           </div>
 

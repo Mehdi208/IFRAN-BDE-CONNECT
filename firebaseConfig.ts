@@ -1,35 +1,37 @@
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
 
-// REMPLACEZ CECI PAR VOS VRAIES CLÉS FIREBASE
-// Vous les trouverez dans la console Firebase > Paramètres du projet
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+
+// ⚠️ REMPLACEZ CES VALEURS PAR CELLES DE VOTRE CONSOLE FIREBASE
+// Allez sur https://console.firebase.google.com/
+// Créez un projet -> Project Settings -> General -> "Your apps" -> SDK setup and configuration
 const firebaseConfig = {
-  apiKey: "VOTRE_API_KEY",
-  authDomain: "bde-ifran.firebaseapp.com",
-  projectId: "bde-ifran",
-  storageBucket: "bde-ifran.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
+  apiKey: "AIzaSyBaITth3SJ2nE160zgaD-ae5PszieyHdx4",
+  authDomain: "bde-ifran-app.firebaseapp.com",
+  projectId: "bde-ifran-app",
+  storageBucket: "bde-ifran-app.firebasestorage.app",
+  messagingSenderId: "703434203420",
+  appId: "1:703434203420:web:24d2e5e0bd9daf45561ad9"
 };
 
-// Initialisation conditionnelle pour ne pas casser l'app si pas de clés
+// Initialisation conditionnelle pour éviter les crashs si pas configuré
 let app;
-let auth;
-let db;
+let db: any;
+let auth: any;
 
 try {
-    // On vérifie si la config est remplie (placeholder)
-    if (firebaseConfig.apiKey !== "VOTRE_API_KEY") {
+    // On vérifie simplement si l'objet existe, la clé a été mise à jour par l'utilisateur
+    if (firebaseConfig.apiKey) {
         app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
         db = getFirestore(app);
-        console.log("Firebase connecté avec succès");
+        auth = getAuth(app);
+        console.log("Firebase (DB + Auth) connecté ✅");
     } else {
-        console.warn("Firebase non configuré : Mode Mock activé");
+        console.warn("Firebase non configuré. Mode Démo (LocalStorage) activé ⚠️");
     }
-} catch (error) {
-    console.error("Erreur init Firebase:", error);
+} catch (e) {
+    console.error("Erreur init Firebase:", e);
 }
 
-export { auth, db };
+export { db, auth };

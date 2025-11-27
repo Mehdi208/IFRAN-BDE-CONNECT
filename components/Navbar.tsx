@@ -24,10 +24,10 @@ const Navbar = () => {
             <Link to="/" className="flex-shrink-0 flex items-center gap-4 group">
               {/* Text Only Branding */}
               <div className="border-l-4 border-bde-rose pl-3 py-1">
-                <span className="text-white font-extrabold text-xl sm:text-2xl tracking-wider uppercase block leading-none">
+                <span className="text-white font-extrabold text-xl sm:text-2xl tracking-wider uppercase block leading-none group-hover:text-gray-200 transition-colors">
                   BDE IFRAN
                 </span>
-                <span className="text-bde-rose font-bold text-sm tracking-[0.2em] uppercase block leading-none mt-1">
+                <span className="text-bde-rose font-bold text-sm tracking-[0.2em] uppercase block leading-none mt-1 group-hover:text-white transition-colors">
                   CONNECT
                 </span>
               </div>
@@ -35,19 +35,24 @@ const Navbar = () => {
           </div>
           
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:flex items-center space-x-6">
             {links.map((link) => (
               <Link
                 key={link.path}
                 to={link.path}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2
+                className={`relative px-2 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-2 group
                   ${isActive(link.path) 
-                    ? 'bg-bde-rose text-white' 
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                    ? 'text-white' 
+                    : 'text-gray-300 hover:text-white'
                   }`}
               >
-                {link.icon && <link.icon size={16} />}
+                {link.icon && <link.icon size={16} className={`transition-transform group-hover:-translate-y-0.5 ${isActive(link.path) ? 'text-bde-rose' : 'text-gray-400 group-hover:text-bde-rose'}`} />}
                 {link.label}
+                
+                {/* Underline Slide Animation */}
+                <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-bde-rose transform origin-left transition-transform duration-300 ease-out
+                  ${isActive(link.path) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'}
+                `}></span>
               </Link>
             ))}
           </div>
@@ -56,7 +61,7 @@ const Navbar = () => {
           <div className="md:hidden flex items-center">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-white/10 focus:outline-none"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-white/10 focus:outline-none transition-colors"
             >
               {isOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -66,20 +71,20 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden bg-bde-navy border-t border-white/10">
+        <div className="md:hidden bg-bde-navy border-t border-white/10 animate-fade-in">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {links.map((link) => (
               <Link
                 key={link.path}
                 to={link.path}
                 onClick={() => setIsOpen(false)}
-                className={`block px-3 py-2 rounded-md text-base font-medium flex items-center gap-2
+                className={`block px-3 py-3 rounded-md text-base font-medium flex items-center gap-3 transition-all
                   ${isActive(link.path)
-                    ? 'bg-bde-rose text-white'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                    ? 'bg-white/10 text-white border-l-4 border-bde-rose pl-2'
+                    : 'text-gray-300 hover:bg-white/5 hover:text-white'
                   }`}
               >
-                {link.icon && <link.icon size={18} />}
+                {link.icon && <link.icon size={18} className={isActive(link.path) ? 'text-bde-rose' : ''} />}
                 {link.label}
               </Link>
             ))}

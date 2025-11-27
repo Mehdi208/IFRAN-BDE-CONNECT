@@ -2,9 +2,29 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="logo.png" />
+    <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BDE Connect IFRAN</title>
+    
+    <!-- SEO Principal -->
+    <title>BDE Connect IFRAN - La Plateforme Officielle</title>
+    <meta name="description" content="Plateforme officielle du Bureau des Étudiants de l'IFRAN Côte d'Ivoire. Gestion des événements, clubs, tutorats et vie étudiante." />
+    
+    <!-- Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://bde-ifran-app.web.app/" />
+    <meta property="og:title" content="BDE Connect IFRAN" />
+    <meta property="og:description" content="Rejoignez la vie étudiante ! Découvrez les clubs, l'agenda des événements et l'équipe du BDE IFRAN." />
+    <meta property="og:image" content="https://bde-ifran-app.web.app/logo.png" />
+    <meta property="og:image:width" content="500" />
+    <meta property="og:image:height" content="500" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://bde-ifran-app.web.app/" />
+    <meta property="twitter:title" content="BDE Connect IFRAN" />
+    <meta property="twitter:description" content="Rejoignez la vie étudiante ! Découvrez les clubs, l'agenda des événements et l'équipe du BDE IFRAN." />
+    <meta property="twitter:image" content="https://bde-ifran-app.web.app/logo.png" />
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -23,17 +43,36 @@
               sans: ['Inter', 'sans-serif'],
             },
             animation: {
-              'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
-              'fade-in': 'fadeIn 1s ease-out forwards',
+              'fade-in-up': 'fadeInUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards', // Plus fluide
+              'fade-in': 'fadeIn 1.2s ease-out forwards',
+              'float': 'float 12s ease-in-out infinite', // Ralenti (6s -> 12s)
+              'float-delayed': 'float 12s ease-in-out 4s infinite', // Ralenti
+              'float-slow': 'float 16s ease-in-out 2s infinite', // Ralenti
+              'gradient-x': 'gradient-x 15s ease infinite',
+              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
             },
             keyframes: {
               fadeInUp: {
-                '0%': { opacity: '0', transform: 'translateY(20px)' },
+                '0%': { opacity: '0', transform: 'translateY(40px)' },
                 '100%': { opacity: '1', transform: 'translateY(0)' },
               },
               fadeIn: {
                 '0%': { opacity: '0' },
                 '100%': { opacity: '1' },
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-6px)' }, // Amplitude très réduite (était -15px)
+              },
+              'gradient-x': {
+                '0%, 100%': {
+                    'background-size': '200% 200%',
+                    'background-position': 'left center'
+                },
+                '50%': {
+                    'background-size': '200% 200%',
+                    'background-position': 'right center'
+                },
               },
             },
           },
@@ -45,12 +84,21 @@
       body {
         font-family: 'Inter', sans-serif;
         background-color: #F8FAFC;
-      }
-      .animate-on-scroll {
-        opacity: 0;
-        animation: fadeInUp 0.8s ease-out forwards;
+        overflow-x: hidden;
       }
       
+      /* Système d'animation au scroll (Reveal) */
+      .reveal {
+        opacity: 0;
+        transform: translateY(40px);
+        transition: all 1s cubic-bezier(0.16, 1, 0.3, 1); /* Courbe Apple "ease-out" */
+      }
+      
+      .reveal.active {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
       /* Animation texte brillant */
       .shiny-effect {
         background: linear-gradient(to right, #9ca3af 0%, #ffffff 50%, #9ca3af 100%);
@@ -68,20 +116,29 @@
           background-position: 200% center;
         }
       }
+
+      /* Utilitaires pour masquer la scrollbar tout en gardant le scroll */
+      .no-scrollbar::-webkit-scrollbar {
+          display: none;
+          scrollbar-width: none; /* Firefox */
+      }
+      .no-scrollbar {
+          -ms-overflow-style: none; /* IE and Edge */
+          scrollbar-width: none; /* Firefox */
+      }
     </style>
   <script type="importmap">
 {
   "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
-    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.4",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.0",
-    "jspdf-autotable": "https://aistudiocdn.com/jspdf-autotable@^5.0.2",
-    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1",
     "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.4",
+    "jspdf-autotable": "https://aistudiocdn.com/jspdf-autotable@^5.0.2",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.0",
     "vite": "https://aistudiocdn.com/vite@^7.2.4",
     "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
   }
@@ -90,5 +147,6 @@
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
