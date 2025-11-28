@@ -33,7 +33,8 @@ const Home = () => {
       <Navbar />
       
       {/* Hero Section avec animation Aurora */}
-      <section className="relative overflow-hidden flex items-center justify-center py-24 lg:py-32 bg-gradient-to-r from-bde-navy via-[#1e3a6f] to-bde-navy bg-[length:200%_auto] animate-gradient-x text-white">
+      {/* Modification ici : remplacement du padding fixe (py-24) par une hauteur calculée (min-h-[calc(100vh-5rem)]) */}
+      <section className="relative overflow-hidden flex items-center justify-center min-h-[calc(100vh-5rem)] bg-gradient-to-r from-bde-navy via-[#1e3a6f] to-bde-navy bg-[length:200%_auto] animate-gradient-x text-white">
         
         {/* Background Overlay Elements */}
         <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 animate-pulse-slow pointer-events-none"></div>
@@ -56,7 +57,8 @@ const Home = () => {
           
           {/* Correction : Séparation des animations pour éviter le conflit d'opacité */}
           <div className="w-full animate-fade-in-up opacity-0" style={{ animationDelay: '0.6s' }}>
-             <div className="flex flex-col sm:flex-row gap-5 justify-center items-center w-full animate-float-slow">
+             {/* Changement ici: animate-float-delayed au lieu de animate-float-slow pour synchroniser avec le texte */}
+             <div className="flex flex-col sm:flex-row gap-5 justify-center items-center w-full animate-float-delayed">
                 <Link to="/calendar" className="group relative overflow-hidden bg-bde-rose hover:bg-rose-600 text-white px-8 py-4 rounded-full font-bold text-lg transition-all shadow-lg shadow-rose-500/30 flex items-center justify-center gap-2 hover:scale-105 transform hover:-translate-y-1">
                     <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:animate-shine"></div>
                     <span>Voir l'Agenda</span> <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
