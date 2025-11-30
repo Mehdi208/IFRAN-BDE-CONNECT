@@ -1,7 +1,7 @@
 
 import { db } from '../firebaseConfig';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { Club, Event, Member, Mentor, Student } from '../types';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { Club, Event, Member, Mentor, Student, CinemaSale, ClubRegistration } from '../types';
 
 // --- MOCK DATA (Fallback) ---
 export const MOCK_MEMBERS: Member[] = [
@@ -76,10 +76,10 @@ export const MOCK_EVENTS: Event[] = [
 ];
 
 export const MOCK_STUDENTS: Student[] = [
-  { id: '1', name: 'Koné Bakary', level: 'B2 Dev', hasPaid: true, paymentDate: '2025-09-01', amount: 15000 },
+  { id: '1', name: 'Koné Bakary', level: 'B2 Dev', hasPaid: true, paymentDate: '2025-09-01', amount: 4000, paymentType: 'Mensuel' },
   { id: '2', name: 'Soro Minata', level: 'Prépa 1', hasPaid: false },
-  { id: '3', name: 'Kouamé Cyrille', level: 'Master 1', hasPaid: true, paymentDate: '2025-09-10', amount: 15000 },
-  { id: '4', name: 'Zadi Prisca', level: 'B3 Com', hasPaid: true, paymentDate: '2025-09-05', amount: 15000 },
+  { id: '3', name: 'Kouamé Cyrille', level: 'Master 1', hasPaid: true, paymentDate: '2025-09-10', amount: 4000, paymentType: 'Mensuel' },
+  { id: '4', name: 'Zadi Prisca', level: 'B3 Com', hasPaid: true, paymentDate: '2025-09-05', amount: 10000, paymentType: 'Ponctuel' },
 ];
 
 export const MOCK_MENTORS: Mentor[] = [
@@ -91,9 +91,9 @@ export const MOCK_MENTORS: Mentor[] = [
 
 const getFromStorage = <T,>(key: string, defaultData: T): T => {
   try {
-    const stored = localStorage.getItem(key + '_v3'); // v3 for clean start
+    const stored = localStorage.getItem(key + '_v4'); // v4 for new schema
     if (stored) return JSON.parse(stored);
-    localStorage.setItem(key + '_v3', JSON.stringify(defaultData));
+    localStorage.setItem(key + '_v4', JSON.stringify(defaultData));
     return defaultData;
   } catch (e) {
     return defaultData;
@@ -101,7 +101,7 @@ const getFromStorage = <T,>(key: string, defaultData: T): T => {
 };
 
 const saveToStorage = (key: string, data: any) => {
-  localStorage.setItem(key + '_v3', JSON.stringify(data));
+  localStorage.setItem(key + '_v4', JSON.stringify(data));
 };
 
 // Generic CRUD helper
@@ -109,7 +109,6 @@ const getAll = async <T>(collectionName: string, mockData: T[]): Promise<T[]> =>
   if (db) {
     try {
       const snapshot = await getDocs(collection(db, collectionName));
-      // Option: si vide et que c'est la première fois, on pourrait charger les mocks, mais pour l'instant on retourne vide
       if (snapshot.empty) return [];
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
     } catch (error) {
@@ -117,7 +116,6 @@ const getAll = async <T>(collectionName: string, mockData: T[]): Promise<T[]> =>
       return getFromStorage(collectionName, mockData);
     }
   } else {
-    // Simulation d'un délai réseau pour le réalisme
     await new Promise(resolve => setTimeout(resolve, 300));
     return getFromStorage(collectionName, mockData);
   }
@@ -177,6 +175,31 @@ export const dataService = {
   updateClub: (club: Club) => updateOne('clubs', club, MOCK_CLUBS),
   deleteClub: (id: string) => deleteOne('clubs', id, MOCK_CLUBS),
 
+  // Club Registrations
+  registerToClub: async (registration: Omit<ClubRegistration, 'id'>) => {
+    if (db) {
+       await addDoc(collection(db, 'club_registrations'), registration);
+    } else {
+       const current = getFromStorage('club_registrations', []) as any[];
+       const newItem = { ...registration, id: Date.now().toString() };
+       saveToStorage('club_registrations', [...current, newItem]);
+    }
+  },
+  
+  fetchClubRegistrations: async (clubId?: string) => {
+    if (db) {
+        const ref = collection(db, 'club_registrations');
+        const snapshot = await getDocs(ref);
+        const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClubRegistration));
+        if (clubId) return all.filter(r => r.clubId === clubId);
+        return all;
+    } else {
+        const all = getFromStorage<ClubRegistration[]>('club_registrations', []);
+        if (clubId) return all.filter(r => r.clubId === clubId);
+        return all;
+    }
+  },
+
   // Events
   fetchEvents: () => getAll<Event>('events', MOCK_EVENTS),
   addEvent: (event: Omit<Event, 'id'>) => addOne('events', event, MOCK_EVENTS),
@@ -188,6 +211,11 @@ export const dataService = {
   addStudent: (student: Omit<Student, 'id'>) => addOne('students', student, MOCK_STUDENTS),
   updateStudent: (student: Student) => updateOne('students', student, MOCK_STUDENTS),
   deleteStudent: (id: string) => deleteOne('students', id, MOCK_STUDENTS),
+
+  // Cinema Sales
+  fetchCinemaSales: () => getAll<CinemaSale>('cinema_sales', []),
+  addCinemaSale: (sale: Omit<CinemaSale, 'id'>) => addOne('cinema_sales', sale, []),
+  deleteCinemaSale: (id: string) => deleteOne('cinema_sales', id, []),
   
   // Mentors (Static)
   getMentors: () => MOCK_MENTORS,
@@ -198,10 +226,11 @@ export const dataService = {
     const clubs = await getAll('clubs', MOCK_CLUBS);
     const events = await getAll('events', MOCK_EVENTS);
     const paidCount = students.filter((s: any) => s.hasPaid).length;
+    const totalCollected = students.filter((s: any) => s.hasPaid).reduce((acc, s: any) => acc + (s.amount || 0), 0);
     
     return {
       totalStudents: students.length,
-      totalCollected: paidCount * 15000,
+      totalCollected: totalCollected,
       activeClubs: clubs.length,
       eventsCount: events.length
     };

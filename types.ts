@@ -1,3 +1,4 @@
+
 export interface Member {
   id: string;
   name: string;
@@ -15,6 +16,15 @@ export interface Club {
   activities: string[];
 }
 
+export interface ClubRegistration {
+  id: string;
+  clubId: string;
+  studentName: string;
+  studentLevel: string;
+  studentWhatsapp: string;
+  date: string;
+}
+
 export interface Event {
   id: string;
   title: string;
@@ -30,6 +40,7 @@ export interface Student {
   name: string;
   level: string; // e.g., "L1", "L2", "Master"
   hasPaid: boolean;
+  paymentType?: 'Mensuel' | 'Ponctuel' | 'Autre';
   paymentDate?: string;
   amount?: number;
 }
@@ -39,6 +50,16 @@ export interface Mentor {
   name: string;
   subject: string;
   whatsapp: string;
+}
+
+export interface CinemaSale {
+  id: string;
+  itemName: string; // Ex: Ticket, Popcorn, Boisson
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  date: string;
+  buyerName?: string; // Optionnel
 }
 
 export interface Stats {

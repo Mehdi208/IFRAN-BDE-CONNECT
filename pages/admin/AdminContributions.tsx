@@ -1,10 +1,10 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
 import { Student } from '../../types';
-import { Download, Search, CheckCircle, XCircle, Plus, Trash2, Edit, Filter, AlertTriangle } from 'lucide-react';
-import { generateCotisationReport } from '../../services/pdfService';
+import { Download, Search, CheckCircle, XCircle, Plus, Trash2, Edit, Filter, AlertTriangle, FileText } from 'lucide-react';
+import { generateCotisationReport, generatePaymentReceipt } from '../../services/pdfService';
 
 const AdminContributions = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -13,9 +13,8 @@ const AdminContributions = () => {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // State pour la confirmation de suppression (ID de l'étudiant à supprimer)
+  // Delete States
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  // State pour la confirmation dans la modale
   const [modalDeleteConfirm, setModalDeleteConfirm] = useState(false);
 
   // Filters
@@ -26,7 +25,8 @@ const AdminContributions = () => {
   // Form State
   const [name, setName] = useState('');
   const [level, setLevel] = useState('Prépa 1');
-  const [amount, setAmount] = useState<string>('0'); 
+  const [paymentType, setPaymentType] = useState<'Mensuel' | 'Ponctuel'>('Mensuel');
+  const [amount, setAmount] = useState<string>('4000'); 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
   const levels = [
@@ -51,17 +51,19 @@ const AdminContributions = () => {
     loadData();
   }, []);
 
+  // Update amount when payment type changes
   useEffect(() => {
-    if (!showAddForm) {
-        setModalDeleteConfirm(false);
+    if (paymentType === 'Mensuel') {
+        setAmount('4000');
     }
-  }, [showAddForm]);
+  }, [paymentType]);
 
   const openEditModal = (student: Student) => {
     setEditingStudent(student);
     setName(student.name);
     setLevel(student.level);
-    setAmount(student.amount ? student.amount.toString() : '0');
+    setPaymentType(student.paymentType === 'Ponctuel' ? 'Ponctuel' : 'Mensuel');
+    setAmount(student.amount ? student.amount.toString() : '4000');
     setDate(student.paymentDate || new Date().toISOString().split('T')[0]);
     setShowAddForm(true);
   };
@@ -70,23 +72,10 @@ const AdminContributions = () => {
     setEditingStudent(null);
     setName('');
     setLevel('Prépa 1');
-    setAmount('0');
+    setPaymentType('Mensuel');
+    setAmount('4000');
     setDate(new Date().toISOString().split('T')[0]);
     setShowAddForm(true);
-  };
-
-  const handleTogglePayment = async (id: string) => {
-    const student = students.find(s => s.id === id);
-    if (student) {
-        const updated = { 
-          ...student, 
-          hasPaid: !student.hasPaid, 
-          paymentDate: !student.hasPaid ? new Date().toISOString().split('T')[0] : undefined,
-          amount: !student.hasPaid ? 15000 : 0
-        };
-        const newList = await dataService.updateStudent(updated);
-        setStudents(newList);
-    }
   };
 
   const handleSaveStudent = async (e: React.FormEvent) => {
@@ -102,6 +91,7 @@ const AdminContributions = () => {
             level,
             hasPaid: isPaid,
             amount: amountVal,
+            paymentType,
             paymentDate: isPaid ? date : undefined
         };
         const newList = await dataService.updateStudent(updated);
@@ -113,6 +103,7 @@ const AdminContributions = () => {
           level,
           hasPaid: isPaid,
           amount: amountVal,
+          paymentType,
           paymentDate: isPaid ? date : undefined
         };
         const newList = await dataService.addStudent(newStudent);
@@ -121,34 +112,22 @@ const AdminContributions = () => {
     setShowAddForm(false);
   };
 
-  // Suppression directe depuis le tableau
-  const handleDeleteFromTable = async (id: string) => {
+  // Suppression sécurisée
+  const handleDeleteStudent = async (id: string) => {
     const newList = await dataService.deleteStudent(id);
     setStudents(newList);
     setDeleteConfirmId(null);
-  };
-
-  // Suppression depuis la modale
-  const handleDeleteFromModal = async () => {
-    if (editingStudent) {
-        const newList = await dataService.deleteStudent(editingStudent.id);
-        setStudents(newList);
-        setShowAddForm(false);
-    }
+    if(showAddForm) setShowAddForm(false);
   };
 
   const filteredStudents = students.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           s.level.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesLevel = filterLevel === 'all' || s.level === filterLevel;
-    
     const matchesStatus = filterStatus === 'all' 
                           || (filterStatus === 'paid' && s.hasPaid)
                           || (filterStatus === 'unpaid' && !s.hasPaid);
-    
     const matchesDate = !filterDate || (s.paymentDate === filterDate);
-
     return matchesSearch && matchesLevel && matchesStatus && matchesDate;
   });
 
@@ -172,7 +151,7 @@ const AdminContributions = () => {
             className="flex items-center gap-2 bg-bde-navy text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition shadow-sm"
           >
             <Download size={18} />
-            PDF
+            Rapport PDF
           </button>
         </div>
       </div>
@@ -181,7 +160,7 @@ const AdminContributions = () => {
       {showAddForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg animate-fade-in-up">
-            <h3 className="font-bold text-xl mb-6 text-bde-navy">{editingStudent ? 'Modifier étudiant' : 'Ajouter un étudiant'}</h3>
+            <h3 className="font-bold text-xl mb-6 text-bde-navy">{editingStudent ? 'Modifier étudiant' : 'Enregistrer une cotisation'}</h3>
             <form onSubmit={handleSaveStudent} className="space-y-4">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Nom complet</label>
@@ -204,31 +183,45 @@ const AdminContributions = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                   <label className="block text-sm font-bold text-gray-700 mb-1">Montant Payé (FCFA)</label>
+                 <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Type Paiement</label>
+                    <select 
+                        className={selectStyle}
+                        value={paymentType} 
+                        onChange={e => setPaymentType(e.target.value as any)}
+                    >
+                        <option value="Mensuel" className="bg-bde-navy">Mensuel (4000F)</option>
+                        <option value="Ponctuel" className="bg-bde-navy">Ponctuel (Autre)</option>
+                    </select>
+                 </div>
+                 <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-1">Montant (FCFA)</label>
                    <input 
                      type="number" 
-                     className={inputStyle}
-                     value={amount} onChange={e => setAmount(e.target.value)}
+                     className={`${inputStyle} ${paymentType === 'Mensuel' ? 'opacity-70 cursor-not-allowed' : ''}`}
+                     value={amount} 
+                     onChange={e => setAmount(e.target.value)}
                      min="0"
+                     readOnly={paymentType === 'Mensuel'}
                    />
                 </div>
-                <div>
-                   <label className="block text-sm font-bold text-gray-700 mb-1">Date</label>
+              </div>
+
+              <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-1">Date de Paiement</label>
                    <input 
                      type="date" 
                      className={inputStyle}
                      value={date} onChange={e => setDate(e.target.value)}
                    />
-                </div>
               </div>
               
               <div className="flex justify-between items-center mt-6 pt-4 border-t">
-                {/* DELETE BUTTON IN MODAL */}
-                <div>
+                 {/* Delete button logic inside modal */}
+                 <div>
                     {editingStudent && (
                         !modalDeleteConfirm ? (
-                            <button 
+                             <button 
                                 type="button" 
                                 onClick={() => setModalDeleteConfirm(true)}
                                 className="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-100 transition flex items-center gap-2 border border-red-200"
@@ -238,15 +231,15 @@ const AdminContributions = () => {
                         ) : (
                             <button 
                                 type="button" 
-                                onClick={handleDeleteFromModal}
-                                className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 transition flex items-center gap-2 shadow-lg animate-pulse"
+                                onClick={() => handleDeleteStudent(editingStudent.id)}
+                                className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 transition flex items-center gap-2 animate-pulse"
                             >
                                 <AlertTriangle size={18} /> Confirmer ?
                             </button>
                         )
                     )}
-                </div>
-                
+                 </div>
+
                 <div className="flex gap-3">
                     <button type="button" onClick={() => setShowAddForm(false)} className="px-4 py-2 text-gray-500 hover:text-gray-700 font-medium">Annuler</button>
                     <button type="submit" className="bg-bde-navy text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-900 transition shadow-lg">Enregistrer</button>
@@ -322,7 +315,7 @@ const AdminContributions = () => {
                 <th className="p-4">Étudiant</th>
                 <th className="p-4">Niveau</th>
                 <th className="p-4">Statut</th>
-                <th className="p-4">Date Paiement</th>
+                <th className="p-4">Info Paiement</th>
                 <th className="p-4 text-right">Action</th>
               </tr>
             </thead>
@@ -342,19 +335,25 @@ const AdminContributions = () => {
                       </span>
                     )}
                   </td>
-                  <td className="p-4 text-gray-500 text-sm">{student.paymentDate || '-'}</td>
+                  <td className="p-4 text-gray-500 text-sm">
+                    {student.hasPaid ? (
+                        <div className="flex flex-col">
+                            <span>{student.paymentDate}</span>
+                            <span className="text-xs text-bde-rose">{student.paymentType || 'Mensuel'}</span>
+                        </div>
+                    ) : '-'}
+                  </td>
                   <td className="p-4 text-right flex items-center justify-end gap-2">
-                    <button 
-                      type="button"
-                      onClick={() => handleTogglePayment(student.id)}
-                      className={`text-xs px-3 py-1 rounded border transition ${
-                        student.hasPaid 
-                          ? 'border-gray-200 text-gray-600 hover:bg-gray-100' 
-                          : 'border-green-200 text-green-600 hover:bg-green-50'
-                      }`}
-                    >
-                      {student.hasPaid ? 'Annuler' : 'Marquer Payé'}
-                    </button>
+                    {student.hasPaid && (
+                        <button 
+                            onClick={() => generatePaymentReceipt(student)}
+                            className="text-blue-600 bg-blue-50 hover:bg-blue-100 p-2 rounded transition"
+                            title="Télécharger le reçu"
+                        >
+                            <FileText size={16} />
+                        </button>
+                    )}
+                    
                     <button
                         type="button"
                         onClick={() => openEditModal(student)}
@@ -365,22 +364,19 @@ const AdminContributions = () => {
                     </button>
                     
                     {deleteConfirmId === student.id ? (
-                        <button
+                        <button 
                             type="button"
-                            onClick={() => handleDeleteFromTable(student.id)}
-                            className="bg-red-500 text-white text-xs px-2 py-1.5 rounded hover:bg-red-600 transition flex items-center gap-1 animate-pulse"
-                            title="Confirmer la suppression"
+                            onClick={() => handleDeleteStudent(student.id)}
+                            className="bg-red-500 text-white text-xs px-2 py-1 rounded hover:bg-red-600 transition animate-pulse"
                         >
-                            <Trash2 size={12} /> Confirmer ?
+                            Confirmer ?
                         </button>
                     ) : (
                         <button 
                           type="button"
-                          onClick={(e) => {
-                             e.preventDefault();
-                             e.stopPropagation();
-                             setDeleteConfirmId(student.id);
-                             setTimeout(() => setDeleteConfirmId(null), 3000);
+                          onClick={() => {
+                              setDeleteConfirmId(student.id);
+                              setTimeout(() => setDeleteConfirmId(null), 3000);
                           }}
                           className="text-gray-400 hover:text-red-500 transition p-2 cursor-pointer"
                           title="Supprimer"
@@ -391,11 +387,6 @@ const AdminContributions = () => {
                   </td>
                 </tr>
               ))}
-              {filteredStudents.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-gray-500">Aucun étudiant trouvé.</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

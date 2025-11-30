@@ -17,6 +17,7 @@ import AdminClubs from './pages/admin/AdminClubs';
 import AdminDocuments from './pages/admin/AdminDocuments';
 import AdminEvents from './pages/admin/AdminEvents';
 import AdminMembers from './pages/admin/AdminMembers';
+import AdminCinema from './pages/admin/AdminCinema';
 
 // Composant utilitaire pour remonter en haut de page à chaque changement de route
 const ScrollToTop = () => {
@@ -55,6 +56,7 @@ function App() {
         <Route path="/admin/documents" element={<ProtectedRoute><AdminDocuments /></ProtectedRoute>} />
         <Route path="/admin/events" element={<ProtectedRoute><AdminEvents /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
+        <Route path="/admin/cinema" element={<ProtectedRoute><AdminCinema /></ProtectedRoute>} />
         <Route path="/admin/*" element={<Navigate to="/admin/dashboard" />} />
       </Routes>
     </HashRouter>

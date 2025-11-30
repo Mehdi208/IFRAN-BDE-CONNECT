@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -7,16 +8,14 @@ import {
   Calendar, 
   FileText, 
   LogOut,
-  UserCheck
+  UserCheck,
+  ShoppingBag
 } from 'lucide-react';
 
-interface AdminLayoutProps {
-  children: React.ReactNode;
-}
-
-const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
+const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [logoError, setLogoError] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('isAuthenticated');
@@ -29,22 +28,32 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { path: '/admin/clubs', icon: Users, label: 'Clubs' },
     { path: '/admin/events', icon: Calendar, label: 'Événements' },
     { path: '/admin/members', icon: UserCheck, label: 'Membres BDE' },
+    { path: '/admin/cinema', icon: ShoppingBag, label: 'Ventes' },
     { path: '/admin/documents', icon: FileText, label: 'Documents' },
   ];
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-bde-navy text-white hidden md:flex flex-col fixed h-full">
+      <aside className="w-64 bg-bde-navy text-white hidden md:flex flex-col fixed h-full z-50">
         <div className="p-6 border-b border-white/10 flex flex-col items-center text-center">
-          <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-3 text-2xl font-bold text-white border-2 border-bde-rose">
-            BDE
+          <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-3 text-2xl font-bold text-white border-2 border-bde-rose overflow-hidden">
+             {!logoError ? (
+                 <img 
+                    src="logo.png" 
+                    alt="BDE" 
+                    className="w-full h-full object-cover" 
+                    onError={() => setLogoError(true)}
+                 />
+             ) : (
+                 <span className="text-white font-bold text-xl">BDE</span>
+             )}
           </div>
           <h1 className="text-xl font-bold text-bde-rose">Admin Panel</h1>
           <p className="text-xs text-gray-400 mt-1">Espace de gestion</p>
         </div>
         
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
@@ -91,10 +100,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         </div>
       </main>
 
-      {/* Mobile Nav Bottom (Optional, simplified for now) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-bde-navy p-2 flex justify-around z-50">
-          {navItems.slice(0, 5).map(item => (
-             <Link key={item.path} to={item.path} className="p-2 text-white">
+      {/* Mobile Nav Bottom */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-bde-navy p-2 flex justify-around z-50 overflow-x-auto no-scrollbar">
+          {navItems.map(item => (
+             <Link key={item.path} to={item.path} className={`p-3 rounded-lg ${location.pathname === item.path ? 'text-bde-rose' : 'text-white'}`}>
                 <item.icon size={20} />
              </Link>
           ))}

@@ -2,13 +2,17 @@
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
-import { Club } from '../../types';
-import { Plus, Trash2, Edit, MessageCircle, X, Check, AlertTriangle } from 'lucide-react';
+import { Club, ClubRegistration } from '../../types';
+import { Plus, Trash2, Edit, MessageCircle, X, Check, Users, Eye } from 'lucide-react';
 
 const AdminClubs = () => {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClub, setEditingClub] = useState<Club | null>(null);
+  
+  // Registration View State
+  const [viewingRegistrations, setViewingRegistrations] = useState<string | null>(null); // Club ID
+  const [registrations, setRegistrations] = useState<ClubRegistration[]>([]);
   
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -77,6 +81,12 @@ const AdminClubs = () => {
     setIsModalOpen(false);
   };
 
+  const handleViewRegistrations = async (clubId: string) => {
+    setViewingRegistrations(clubId);
+    const regs = await dataService.fetchClubRegistrations(clubId);
+    setRegistrations(regs);
+  };
+
   return (
     <AdminLayout>
       <div className="flex justify-between items-center mb-8">
@@ -92,6 +102,13 @@ const AdminClubs = () => {
             <div className="flex justify-between items-start mb-4">
               <h3 className="font-bold text-xl text-bde-navy">{club.name}</h3>
               <div className="flex gap-2 items-center">
+                <button 
+                    onClick={() => handleViewRegistrations(club.id)} 
+                    className="p-2 text-bde-navy hover:bg-gray-100 rounded-full transition"
+                    title="Voir les inscrits"
+                >
+                    <Eye size={18}/>
+                </button>
                 <button type="button" onClick={() => openModal(club)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition"><Edit size={18}/></button>
                 
                 {deleteConfirmId === club.id ? (
@@ -136,17 +153,11 @@ const AdminClubs = () => {
                 </a>
               </div>
             </div>
-            
-            <div className="mt-4 flex flex-wrap gap-2">
-                {club.activities.map((act, i) => (
-                    <span key={i} className="text-xs bg-bde-navy/5 text-bde-navy border border-bde-navy/10 px-2.5 py-1 rounded-full font-medium">{act}</span>
-                ))}
-            </div>
           </div>
         ))}
       </div>
 
-      {/* Modal */}
+      {/* Modal CRUD */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all scale-100">
@@ -163,56 +174,26 @@ const AdminClubs = () => {
                   className={inputStyle}
                   value={name} 
                   onChange={e => setName(e.target.value)} 
-                  placeholder="Ex: Club Informatique"
                   required 
                 />
               </div>
-              
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Description</label>
-                <textarea 
-                  className={textAreaStyle}
-                  value={desc} 
-                  onChange={e => setDesc(e.target.value)} 
-                  placeholder="Brève description des objectifs du club..."
-                  required
-                ></textarea>
+                <textarea className={textAreaStyle} value={desc} onChange={e => setDesc(e.target.value)} required></textarea>
               </div>
-
               <div className="grid grid-cols-2 gap-5">
                 <div>
                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Responsable</label>
-                   <input 
-                    type="text" 
-                    className={inputStyle}
-                    value={leader} 
-                    onChange={e => setLeader(e.target.value)} 
-                    placeholder="Nom complet"
-                    required 
-                   />
+                   <input type="text" className={inputStyle} value={leader} onChange={e => setLeader(e.target.value)} required />
                 </div>
                 <div>
                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">WhatsApp</label>
-                   <input 
-                    type="text" 
-                    className={inputStyle}
-                    value={contact} 
-                    onChange={e => setContact(e.target.value)} 
-                    placeholder="22507..."
-                    required 
-                   />
+                   <input type="text" className={inputStyle} value={contact} onChange={e => setContact(e.target.value)} required />
                 </div>
               </div>
-              
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Activités (séparées par des virgules)</label>
-                <input 
-                  type="text" 
-                  className={inputStyle}
-                  value={activities} 
-                  onChange={e => setActivities(e.target.value)} 
-                  placeholder="Atelier, Tournoi, Conférence..." 
-                />
+                <input type="text" className={inputStyle} value={activities} onChange={e => setActivities(e.target.value)} />
               </div>
 
               <div className="pt-4 flex justify-end gap-3">
@@ -224,6 +205,46 @@ const AdminClubs = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal Registrations List */}
+      {viewingRegistrations && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[80vh] flex flex-col">
+                  <div className="flex justify-between items-center p-6 border-b bg-gray-50">
+                    <h3 className="font-bold text-xl text-bde-navy flex items-center gap-2">
+                        <Users /> Inscriptions : {clubs.find(c => c.id === viewingRegistrations)?.name}
+                    </h3>
+                    <button onClick={() => setViewingRegistrations(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                  </div>
+                  <div className="p-6 overflow-y-auto">
+                     {registrations.length > 0 ? (
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 text-gray-500 text-sm">
+                                <tr>
+                                    <th className="p-3">Date</th>
+                                    <th className="p-3">Étudiant</th>
+                                    <th className="p-3">Niveau</th>
+                                    <th className="p-3">Contact</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {registrations.map(reg => (
+                                    <tr key={reg.id}>
+                                        <td className="p-3 text-sm text-gray-500">{new Date(reg.date).toLocaleDateString()}</td>
+                                        <td className="p-3 font-bold text-gray-800">{reg.studentName}</td>
+                                        <td className="p-3 text-sm">{reg.studentLevel}</td>
+                                        <td className="p-3 text-green-600 font-medium">{reg.studentWhatsapp}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                     ) : (
+                         <div className="text-center py-10 text-gray-500">Aucune inscription pour le moment.</div>
+                     )}
+                  </div>
+              </div>
+          </div>
       )}
     </AdminLayout>
   );
