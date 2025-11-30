@@ -28,7 +28,7 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { path: '/admin/clubs', icon: Users, label: 'Clubs' },
     { path: '/admin/events', icon: Calendar, label: 'Événements' },
     { path: '/admin/members', icon: UserCheck, label: 'Membres BDE' },
-    { path: '/admin/cinema', icon: ShoppingBag, label: 'Ventes' },
+    { path: '/admin/cinema', icon: ShoppingBag, label: 'Vente Cinéma' },
     { path: '/admin/documents', icon: FileText, label: 'Documents' },
   ];
 
@@ -40,7 +40,7 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-3 text-2xl font-bold text-white border-2 border-bde-rose overflow-hidden">
              {!logoError ? (
                  <img 
-                    src="logo.png" 
+                    src="/logo.png" 
                     alt="BDE" 
                     className="w-full h-full object-cover" 
                     onError={() => setLogoError(true)}

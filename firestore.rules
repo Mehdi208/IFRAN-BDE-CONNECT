@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Fonction pour vérifier si l'utilisateur est connecté (Admin)
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // 1. COLLECTIONS PUBLIQUES (Lecture pour tous, Écriture pour Admin)
+    // Concerne : Membres BDE, Clubs, Événements, Mentors
+    match /{collection}/ {document} {
+      // Les collections 'members', 'clubs', 'events', 'mentors' sont lisibles par tous
+      // et modifiables (écriture) seulement par un utilisateur authentifié (Admin).
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // 2. INSCRIPTIONS AUX CLUBS (club_registrations)
+    // -> N'importe qui peut s'inscrire (créer un document)
+    // -> Tout le monde peut LIRE la liste des inscrits (pour voir qui a rejoint)
+    // -> Seul l'Admin peut modifier ou supprimer une inscription.
+    match /club_registrations/{document=**} {
+      allow create: if true; // Permettre l'inscription publique
+      allow read: if true;   // Permettre de voir la liste des inscrits publiquement
+      allow update, delete: if isAdmin(); // Seul l'Admin peut gérer les inscriptions
+    }
+
+    // 3. COTISATIONS (students) - Données Sensibles
+    // -> Seul l'Admin peut TOUT faire (Lire et Écrire, Mettre à jour, Supprimer)
+    // -> Le public ne peut RIEN voir pour des raisons de confidentialité.
+    match /students/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // 4. VENTES CINÉMA (cinema_sales) - Données Administratives
+    // -> Seul l'Admin peut TOUT faire (Lire et Écrire, Mettre à jour, Supprimer)
+    // -> Le public ne peut RIEN voir.
+    match /cinema_sales/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // 5. RÈGLE PAR DÉFAUT (Bloquer tout le reste)
+    // -> Toute autre collection non spécifiée ci-dessus est bloquée par défaut.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

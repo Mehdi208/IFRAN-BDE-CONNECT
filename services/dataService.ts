@@ -215,6 +215,7 @@ export const dataService = {
   // Cinema Sales
   fetchCinemaSales: () => getAll<CinemaSale>('cinema_sales', []),
   addCinemaSale: (sale: Omit<CinemaSale, 'id'>) => addOne('cinema_sales', sale, []),
+  updateCinemaSale: (sale: CinemaSale) => updateOne('cinema_sales', sale, []),
   deleteCinemaSale: (id: string) => deleteOne('cinema_sales', id, []),
   
   // Mentors (Static)
