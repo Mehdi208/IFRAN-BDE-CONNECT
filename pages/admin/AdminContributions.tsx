@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
@@ -211,7 +210,7 @@ const AdminContributions = () => {
                    <label className="block text-sm font-bold text-gray-700 mb-1">Date de Paiement</label>
                    <input 
                      type="date" 
-                     className={inputStyle}
+                     className={`${inputStyle} [color-scheme:dark]`}
                      value={date} onChange={e => setDate(e.target.value)}
                    />
               </div>
@@ -280,7 +279,7 @@ const AdminContributions = () => {
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="bg-bde-navy text-white px-3 py-2 rounded-lg text-sm border-none focus:ring-2 focus:ring-bde-rose outline-none placeholder-gray-300"
+            className="bg-bde-navy text-white px-3 py-2 rounded-lg text-sm border-none focus:ring-2 focus:ring-bde-rose outline-none placeholder-gray-300 [color-scheme:dark]"
             placeholder="Date de paiement"
         />
 

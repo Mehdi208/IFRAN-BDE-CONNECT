@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
@@ -22,6 +23,7 @@ const AdminClubs = () => {
   const [leader, setLeader] = useState('');
   const [contact, setContact] = useState('');
   const [activities, setActivities] = useState('');
+  const [emoji, setEmoji] = useState('');
 
   const inputStyle = "w-full bg-bde-navy text-white border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition placeholder-gray-400";
   const textAreaStyle = "w-full bg-bde-navy text-white border border-gray-600 p-3 rounded-lg focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition h-24 resize-none placeholder-gray-400";
@@ -43,6 +45,7 @@ const AdminClubs = () => {
       setLeader(club.leaderName);
       setContact(club.leaderWhatsapp);
       setActivities(club.activities.join(', '));
+      setEmoji(club.emoji || '');
     } else {
       setEditingClub(null);
       setName('');
@@ -50,6 +53,7 @@ const AdminClubs = () => {
       setLeader('');
       setContact('');
       setActivities('');
+      setEmoji('');
     }
     setIsModalOpen(true);
   };
@@ -67,13 +71,13 @@ const AdminClubs = () => {
     if (editingClub) {
         const updated = {
             ...editingClub,
-            name, description: desc, leaderName: leader, leaderWhatsapp: contact, activities: actList
+            name, description: desc, leaderName: leader, leaderWhatsapp: contact, activities: actList, emoji
         };
         const newList = await dataService.updateClub(updated);
         setClubs(newList);
     } else {
         const newClub = {
-            name, description: desc, leaderName: leader, leaderWhatsapp: contact, activities: actList
+            name, description: desc, leaderName: leader, leaderWhatsapp: contact, activities: actList, emoji
         };
         const newList = await dataService.addClub(newClub);
         setClubs(newList);
@@ -100,7 +104,10 @@ const AdminClubs = () => {
         {clubs.map(club => (
           <div key={club.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full hover:shadow-md transition">
             <div className="flex justify-between items-start mb-4">
-              <h3 className="font-bold text-xl text-bde-navy">{club.name}</h3>
+              <div className="flex items-center gap-4">
+                <span className="text-3xl">{club.emoji || '👥'}</span>
+                <h3 className="font-bold text-xl text-bde-navy">{club.name}</h3>
+              </div>
               <div className="flex gap-2 items-center">
                 <button 
                     onClick={() => handleViewRegistrations(club.id)} 
@@ -167,15 +174,27 @@ const AdminClubs = () => {
             </div>
             
             <form onSubmit={handleSave} className="p-8 space-y-5">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nom du Club</label>
-                <input 
-                  type="text" 
-                  className={inputStyle}
-                  value={name} 
-                  onChange={e => setName(e.target.value)} 
-                  required 
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nom du Club</label>
+                  <input 
+                    type="text" 
+                    className={inputStyle}
+                    value={name} 
+                    onChange={e => setName(e.target.value)} 
+                    required 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Emoji</label>
+                  <input 
+                    type="text" 
+                    className={inputStyle}
+                    value={emoji} 
+                    onChange={e => setEmoji(e.target.value)} 
+                    placeholder="⚽"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Description</label>

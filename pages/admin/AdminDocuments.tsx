@@ -1,14 +1,15 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
-import { FileText, Download, Mail, DollarSign, Calendar } from 'lucide-react';
+import { FileText, Download, Mail, DollarSign, Calendar, Clock, RefreshCw } from 'lucide-react';
 import { dataService } from '../../services/dataService';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { generateEmailPDF, generateMeetingPDF, generateFinanceReport } from '../../services/pdfService';
+import { DocumentRecord } from '../../types';
 
 const AdminDocuments = () => {
   const [activeTab, setActiveTab] = useState<'none' | 'email' | 'meeting' | 'finance'>('none');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [history, setHistory] = useState<DocumentRecord[]>([]);
 
   // Finance Date Range
   const [finStartDate, setFinStartDate] = useState(new Date(new Date().getFullYear(), 8, 1).toISOString().split('T')[0]);
@@ -38,152 +39,68 @@ const AdminDocuments = () => {
   const inputStyle = "w-full bg-bde-navy text-white border border-gray-600 p-3 rounded-lg focus:ring-2 focus:ring-bde-rose outline-none placeholder-gray-400";
   const labelStyle = "block text-base font-extrabold text-bde-navy mb-2 uppercase tracking-wide"; 
 
-  const generateEmailPDF = () => {
-    const doc = new jsPDF();
-    
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(0, 51, 153); // Blue
-    doc.text("EMAIL OFFICIEL DE DEMANDE DE VALIDATION", 105, 20, { align: 'center' });
-    
-    doc.setFontSize(14);
-    doc.setTextColor(0);
-    doc.text(`Objet : Demande de validation – ${evtName}`, 20, 40);
-    
-    doc.setFontSize(12);
-    doc.text("Madame / Monsieur,", 20, 50);
-    doc.text("Conformément au règlement du Bureau des Étudiants d’IFRAN, je sollicite par la présente la", 20, 60);
-    doc.text("validation de l’activité suivante :", 20, 65);
-    
-    let y = 80;
-    const lineHeight = 8;
-    
-    doc.setFont("helvetica", "bold"); doc.text("Nom de l’activité :", 20, y); doc.setFont("helvetica", "normal"); doc.text(evtName, 70, y); y+=lineHeight;
-    doc.setFont("helvetica", "bold"); doc.text("Objectif :", 20, y); doc.setFont("helvetica", "normal"); doc.text(evtObj, 70, y); y+=lineHeight;
-    doc.setFont("helvetica", "bold"); doc.text("Date proposée :", 20, y); doc.setFont("helvetica", "normal"); doc.text(evtDate, 70, y); y+=lineHeight;
-    doc.setFont("helvetica", "bold"); doc.text("Horaire :", 20, y); doc.setFont("helvetica", "normal"); doc.text(evtTime, 70, y); y+=lineHeight;
-    doc.setFont("helvetica", "bold"); doc.text("Lieu :", 20, y); doc.setFont("helvetica", "normal"); doc.text(evtPlace, 70, y); y+=lineHeight;
-    doc.setFont("helvetica", "bold"); doc.text("Budget estimatif :", 20, y); doc.setFont("helvetica", "normal"); doc.text(evtBudget, 70, y); y+=lineHeight;
-    doc.setFont("helvetica", "bold"); doc.text("Responsables :", 20, y); doc.setFont("helvetica", "normal"); doc.text(evtResp, 70, y); y+=lineHeight+5;
-    
-    doc.setFont("helvetica", "bold"); doc.text("Description :", 20, y); y+=lineHeight;
-    doc.setFont("helvetica", "normal"); 
-    const descLines = doc.splitTextToSize(evtDesc, 170);
-    doc.text(descLines, 20, y);
-    y += (descLines.length * 7) + 10;
-    
-    const footerText = doc.splitTextToSize("L’activité s’inscrit dans le cadre du plan annuel du BDE 2025–2026. Nous restons disponibles pour toute modification ou précision nécessaire.", 170);
-    doc.text(footerText, 20, y);
-    y += 20;
-    
-    doc.text("Cordialement,", 20, y); y+=10;
-    doc.setFont("helvetica", "bold");
-    doc.text("Traoré Abdou-Rahmane Méhdi", 20, y); y+=7;
-    doc.text("Président du BDE IFRAN 2025–2026", 20, y); y+=7;
-    doc.setFont("helvetica", "normal");
-    doc.text("Contact : +225 07 89 60 96 72", 20, y); y+=7;
-    doc.text("Email : traoremehdi6@gmail.com", 20, y);
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
-    doc.save(`Demande_Validation_${evtName.replace(/\s+/g, '_')}.pdf`);
+  const loadHistory = async () => {
+    const recs = await dataService.fetchDocumentRecords();
+    setHistory(recs);
   };
 
-  const generateMeetingPDF = () => {
-    const doc = new jsPDF();
-    
-    // Title
-    doc.setFillColor(15, 30, 58); // Navy
-    doc.rect(0, 0, 210, 30, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.text("COMPTE RENDU – RÉUNION DU BDE IFRAN", 105, 20, { align: 'center' });
-    
-    doc.setTextColor(0);
-    doc.setFontSize(11);
-    let y = 45;
-    
-    doc.text(`Date : ${meetDate}`, 20, y);
-    doc.text(`Heure : ${meetTime}`, 80, y);
-    doc.text(`Lieu : ${meetPlace}`, 140, y);
-    y += 10;
-    
-    doc.text(`Présents : ${meetPresent}`, 20, y); y+=7;
-    doc.text(`Absents : ${meetAbsent}`, 20, y); y+=15;
-    
-    const addSection = (title: string, content: string) => {
-        doc.setFillColor(231, 74, 103); // Rose
-        doc.rect(20, y, 170, 8, 'F');
-        doc.setTextColor(255);
-        doc.setFont("helvetica", "bold");
-        doc.text(title, 25, y+6);
-        y += 15;
-        doc.setTextColor(0);
-        doc.setFont("helvetica", "normal");
-        
-        const lines = content.split('\n');
-        lines.forEach(line => {
-            doc.text(`• ${line}`, 25, y);
-            y += 7;
-        });
-        y += 5;
-    };
-    
-    addSection("1. Ordre du jour", meetAgenda);
-    addSection("2. Points discutés", meetPoints);
-    addSection("3. Décisions prises", meetDecisions);
-    
-    y += 10;
-    doc.setFont("helvetica", "bold");
-    doc.text("Traoré Abdou-Rahmane Méhdi", 130, y); y+=6;
-    doc.setFontSize(10);
-    doc.text("Président BDE IFRAN", 130, y);
-    
-    doc.save(`Compte_Rendu_${meetDate}.pdf`);
+  const handleGenerateEmail = async () => {
+    const data = { evtName, evtObj, evtDate, evtTime, evtPlace, evtBudget, evtResp, evtDesc };
+    generateEmailPDF(data);
+    await dataService.addDocumentRecord({
+        type: 'email',
+        title: `Validation - ${evtName}`,
+        date: new Date().toISOString(),
+        data: data
+    });
+    loadHistory();
   };
 
-  const generateFinanceReport = async () => {
+  const handleGenerateMeeting = async () => {
+    const data = { meetDate, meetTime, meetPlace, meetPresent, meetAbsent, meetAgenda, meetPoints, meetDecisions };
+    generateMeetingPDF(data);
+    await dataService.addDocumentRecord({
+        type: 'meeting',
+        title: `CR Réunion - ${meetDate}`,
+        date: new Date().toISOString(),
+        data: data
+    });
+    loadHistory();
+  };
+
+  const handleGenerateFinance = async () => {
      setIsGenerating(true);
-     const students = await dataService.fetchStudents(); // ASYNC
+     const students = await dataService.fetchStudents(); // ASYNC fetch current data
+     const data = { start: finStartDate, end: finEndDate };
+     generateFinanceReport(students, data);
      
-     // Filter by date
-     const start = new Date(finStartDate);
-     const end = new Date(finEndDate);
-     end.setHours(23, 59, 59);
-
-     const filteredStudents = students.filter(s => {
-         if(!s.paymentDate) return false;
-         const pDate = new Date(s.paymentDate);
-         return pDate >= start && pDate <= end;
+     await dataService.addDocumentRecord({
+        type: 'finance',
+        title: `Bilan Financier (${finStartDate} - ${finEndDate})`,
+        date: new Date().toISOString(),
+        data: data
      });
-
-     const totalCollected = filteredStudents.reduce((acc, s) => acc + (s.amount || 0), 0);
-
-     const doc = new jsPDF();
-     
-     doc.setFontSize(20);
-     doc.text("Bilan Financier BDE", 105, 20, { align: 'center' });
-     
-     doc.setFontSize(12);
-     doc.text(`Période du : ${finStartDate} au ${finEndDate}`, 105, 30, { align: 'center' });
-     
-     doc.text(`Total Collecté sur la période : ${totalCollected.toLocaleString()} FCFA`, 20, 50);
-
-     const tableBody = filteredStudents.map(s => [
-        s.paymentDate,
-        s.name,
-        s.level,
-        `${s.amount} FCFA`
-     ]);
-     
-     autoTable(doc, {
-        startY: 60,
-        head: [['Date', 'Étudiant', 'Niveau', 'Montant']],
-        body: tableBody,
-        theme: 'striped',
-        headStyles: { fillColor: [15, 30, 58] }
-     });
-     
-     doc.save(`Bilan_Financier_${finStartDate}_${finEndDate}.pdf`);
+     loadHistory();
      setIsGenerating(false);
+  };
+
+  const handleRegenerate = async (record: DocumentRecord) => {
+      if (record.type === 'email') {
+          generateEmailPDF(record.data);
+      } else if (record.type === 'meeting') {
+          generateMeetingPDF(record.data);
+      } else if (record.type === 'finance') {
+          setIsGenerating(true);
+          // For finance, we re-fetch student data to allow regeneration with potentially corrected data, 
+          // keeping the date range from history.
+          const students = await dataService.fetchStudents();
+          generateFinanceReport(students, record.data);
+          setIsGenerating(false);
+      }
   };
 
   return (
@@ -208,7 +125,7 @@ const AdminDocuments = () => {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 mb-12">
         
         {activeTab === 'none' && (
             <div className="text-center text-gray-500 font-medium py-12 text-lg">Sélectionnez un type de document ci-dessus pour commencer.</div>
@@ -232,12 +149,12 @@ const AdminDocuments = () => {
                 </div>
 
                 <button 
-                    onClick={generateFinanceReport} 
+                    onClick={handleGenerateFinance} 
                     disabled={isGenerating}
                     className="bg-green-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-green-700 shadow-lg flex items-center gap-3 mx-auto transition transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isGenerating ? <span className="animate-spin">⌛</span> : <Download size={24} />} 
-                    {isGenerating ? 'Génération...' : 'Télécharger le PDF'}
+                    {isGenerating ? 'Génération...' : 'Générer & Sauvegarder'}
                 </button>
             </div>
         )}
@@ -281,7 +198,7 @@ const AdminDocuments = () => {
                       <textarea className={inputStyle} style={{height: '120px'}} value={evtDesc} onChange={e => setEvtDesc(e.target.value)}></textarea>
                     </div>
                     
-                    <button onClick={generateEmailPDF} className="w-full bg-bde-navy text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-900 shadow-lg mt-6 transition transform hover:scale-105">
+                    <button onClick={handleGenerateEmail} className="w-full bg-bde-navy text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-900 shadow-lg mt-6 transition transform hover:scale-105">
                         Générer l'Email (PDF)
                     </button>
                 </div>
@@ -328,13 +245,62 @@ const AdminDocuments = () => {
                         <textarea className={inputStyle} style={{height: '100px'}} value={meetDecisions} onChange={e => setMeetDecisions(e.target.value)}></textarea>
                     </div>
 
-                    <button onClick={generateMeetingPDF} className="w-full bg-bde-navy text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-900 shadow-lg mt-6 transition transform hover:scale-105">
+                    <button onClick={handleGenerateMeeting} className="w-full bg-bde-navy text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-900 shadow-lg mt-6 transition transform hover:scale-105">
                         Générer le Compte Rendu (PDF)
                     </button>
                 </div>
             </div>
         )}
+      </div>
 
+      {/* History Section */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
+        <h3 className="text-xl font-bold text-bde-navy mb-6 flex items-center gap-2">
+            <Clock size={24} /> Historique des documents générés
+        </h3>
+        
+        <div className="overflow-x-auto">
+            <table className="w-full text-left">
+                <thead className="bg-gray-50 text-gray-500 text-sm">
+                    <tr>
+                        <th className="p-4">Date</th>
+                        <th className="p-4">Document</th>
+                        <th className="p-4">Type</th>
+                        <th className="p-4 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                    {history.map(record => (
+                        <tr key={record.id} className="hover:bg-gray-50 transition">
+                            <td className="p-4 text-sm text-gray-600">
+                                {new Date(record.date).toLocaleDateString('fr-FR')} {new Date(record.date).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}
+                            </td>
+                            <td className="p-4 font-medium text-gray-800">{record.title}</td>
+                            <td className="p-4">
+                                <span className={`text-xs px-2 py-1 rounded font-bold uppercase 
+                                    ${record.type === 'email' ? 'bg-blue-100 text-blue-700' : 
+                                      record.type === 'meeting' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                                    {record.type}
+                                </span>
+                            </td>
+                            <td className="p-4 text-right">
+                                <button 
+                                    onClick={() => handleRegenerate(record)}
+                                    className="inline-flex items-center gap-1 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded transition"
+                                >
+                                    <RefreshCw size={14} /> Re-télécharger
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                    {history.length === 0 && (
+                        <tr>
+                            <td colSpan={4} className="p-8 text-center text-gray-400">Aucun historique disponible.</td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
       </div>
     </AdminLayout>
   );

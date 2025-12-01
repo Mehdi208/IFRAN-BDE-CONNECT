@@ -161,14 +161,14 @@ const AdminCinema = () => {
                         type="date" 
                         value={startDate} 
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="bg-bde-navy text-white text-sm px-3 py-1.5 rounded outline-none border border-transparent focus:border-bde-rose transition"
+                        className="bg-bde-navy text-white text-sm px-3 py-1.5 rounded outline-none border border-transparent focus:border-bde-rose transition [color-scheme:dark]"
                     />
                     <span className="text-gray-400 font-bold">-</span>
                     <input 
                         type="date" 
                         value={endDate} 
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="bg-bde-navy text-white text-sm px-3 py-1.5 rounded outline-none border border-transparent focus:border-bde-rose transition"
+                        className="bg-bde-navy text-white text-sm px-3 py-1.5 rounded outline-none border border-transparent focus:border-bde-rose transition [color-scheme:dark]"
                     />
                 </div>
                 {(startDate || endDate) && (

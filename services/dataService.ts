@@ -1,7 +1,10 @@
 
-import { db } from '../firebaseConfig';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
-import { Club, Event, Member, Mentor, Student, CinemaSale, ClubRegistration } from '../types';
+import { db, storage } from '../firebaseConfig';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Club, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord, EventRegistration } from '../types';
+
+export const CINEMA_CLUB_ID = 'club-cinema-bde';
 
 // --- MOCK DATA (Fallback) ---
 export const MOCK_MEMBERS: Member[] = [
@@ -26,7 +29,8 @@ export const MOCK_CLUBS: Club[] = [
     description: 'Football, Basketball et remise en forme pour tous les étudiants.', 
     leaderName: 'Kouassi Jemima', 
     leaderWhatsapp: '2250140152020',
-    activities: ['Matchs inter-classes', 'Fitness hebdomadaire']
+    activities: ['Matchs inter-classes', 'Fitness hebdomadaire'],
+    emoji: '⚽'
   },
   { 
     id: '2', 
@@ -34,7 +38,8 @@ export const MOCK_CLUBS: Club[] = [
     description: 'Pratique de la langue anglaise, échanges culturels et débats.', 
     leaderName: 'Responsable Club', 
     leaderWhatsapp: '2250140152020',
-    activities: ['Tea Time', 'Movie Night', 'Debate Club']
+    activities: ['Tea Time', 'Movie Night', 'Debate Club'],
+    emoji: '🗣️' // Remplacement du drapeau
   },
   { 
     id: '3', 
@@ -42,7 +47,8 @@ export const MOCK_CLUBS: Club[] = [
     description: 'Apprendre à convaincre, à structurer ses idées et à parler en public.', 
     leaderName: 'Responsable Club', 
     leaderWhatsapp: '2250140152020',
-    activities: ['Concours d\'éloquence', 'Ateliers de prise de parole']
+    activities: ['Concours d\'éloquence', 'Ateliers de prise de parole'],
+    emoji: '🎤'
   },
   { 
     id: '4', 
@@ -50,7 +56,17 @@ export const MOCK_CLUBS: Club[] = [
     description: 'Tournois E-sport, détente et culture gaming.', 
     leaderName: 'Responsable Club', 
     leaderWhatsapp: '2250140152020',
-    activities: ['Tournoi FIFA', 'Soirées Gaming']
+    activities: ['Tournoi FIFA', 'Soirées Gaming'],
+    emoji: '🎮'
+  },
+  { 
+    id: CINEMA_CLUB_ID, 
+    name: 'Club Cinéma', 
+    description: 'Découverte et discussion autour du 7ème art. Projections et analyses de films.', 
+    leaderName: 'Responsable Club', 
+    leaderWhatsapp: '2250140152020',
+    activities: ['Projections hebdomadaires', 'Analyse filmique'],
+    emoji: '🎬'
   },
 ];
 
@@ -163,6 +179,17 @@ const deleteOne = async <T>(collectionName: string, id: string, mockData: T[]): 
 // --- EXPORTED SERVICE ---
 
 export const dataService = {
+  // Image Upload
+  uploadImage: async (file: File): Promise<string> => {
+    if (!storage) {
+        throw new Error("Firebase Storage n'est pas configuré.");
+    }
+    const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+  },
+
   // Members
   fetchMembers: () => getAll<Member>('members', MOCK_MEMBERS),
   addMember: (member: Omit<Member, 'id'>) => addOne('members', member, MOCK_MEMBERS),
@@ -205,6 +232,50 @@ export const dataService = {
   addEvent: (event: Omit<Event, 'id'>) => addOne('events', event, MOCK_EVENTS),
   updateEvent: (event: Event) => updateOne('events', event, MOCK_EVENTS),
   deleteEvent: (id: string) => deleteOne('events', id, MOCK_EVENTS),
+  
+  // Event Registrations
+  addEventRegistration: async (registration: Omit<EventRegistration, 'id'>) => {
+    if (db) {
+       await addDoc(collection(db, 'event_registrations'), registration);
+       // Double inscription si c'est la soirée cinéma
+       if (registration.eventId === 'soiree-cinema-dec12') {
+         const clubRegistrationData = {
+           clubId: CINEMA_CLUB_ID,
+           studentName: registration.studentName,
+           studentLevel: registration.studentLevel,
+           studentWhatsapp: registration.studentWhatsapp,
+           date: new Date().toISOString()
+         };
+         await addDoc(collection(db, 'club_registrations'), clubRegistrationData);
+       }
+    } else {
+       // Mode LocalStorage
+       const currentEventRegs = getFromStorage('event_registrations', []) as any[];
+       const newEventReg = { ...registration, id: `evt-${Date.now()}` };
+       saveToStorage('event_registrations', [...currentEventRegs, newEventReg]);
+
+       if (registration.eventId === 'soiree-cinema-dec12') {
+         const currentClubRegs = getFromStorage('club_registrations', []) as any[];
+         const newClubReg = {
+           clubId: CINEMA_CLUB_ID,
+           studentName: registration.studentName,
+           studentLevel: registration.studentLevel,
+           studentWhatsapp: registration.studentWhatsapp,
+           date: new Date().toISOString(),
+           id: `club-${Date.now()}`
+         };
+         saveToStorage('club_registrations', [...currentClubRegs, newClubReg]);
+       }
+    }
+  },
+  fetchEventRegistrations: async (eventId: string) => {
+    if (db) {
+      const q = query(collection(db, 'event_registrations'), where("eventId", "==", eventId));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventRegistration));
+    }
+    return [];
+  },
 
   // Students (Cotisations)
   fetchStudents: () => getAll<Student>('students', MOCK_STUDENTS),
@@ -218,6 +289,18 @@ export const dataService = {
   updateCinemaSale: (sale: CinemaSale) => updateOne('cinema_sales', sale, []),
   deleteCinemaSale: (id: string) => deleteOne('cinema_sales', id, []),
   
+  // Document History
+  fetchDocumentRecords: async () => {
+    if (db) {
+        const q = query(collection(db, 'documents'), orderBy('date', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DocumentRecord));
+    } else {
+        return getFromStorage<DocumentRecord[]>('documents', []).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+  },
+  addDocumentRecord: (record: Omit<DocumentRecord, 'id'>) => addOne('documents', record, []),
+
   // Mentors (Static)
   getMentors: () => MOCK_MENTORS,
 

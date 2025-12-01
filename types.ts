@@ -1,4 +1,5 @@
 
+
 export interface Member {
   id: string;
   name: string;
@@ -14,6 +15,7 @@ export interface Club {
   leaderName: string;
   leaderWhatsapp: string;
   activities: string[];
+  emoji?: string; // Ajout du champ emoji
 }
 
 export interface ClubRegistration {
@@ -33,6 +35,16 @@ export interface Event {
   description: string;
   imageUrl: string;
   status: 'upcoming' | 'past' | 'cancelled';
+}
+
+export interface EventRegistration {
+  id: string;
+  eventId: string;
+  eventName: string;
+  studentName: string;
+  studentLevel: string;
+  studentWhatsapp: string;
+  date: string;
 }
 
 export interface Student {
@@ -60,6 +72,14 @@ export interface CinemaSale {
   totalPrice: number;
   date: string;
   buyerName?: string; // Optionnel
+}
+
+export interface DocumentRecord {
+  id: string;
+  type: 'email' | 'meeting' | 'finance';
+  title: string;
+  date: string; // Date de génération
+  data: any; // Données JSON pour régénérer le PDF
 }
 
 export interface Stats {

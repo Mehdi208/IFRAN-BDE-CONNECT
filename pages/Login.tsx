@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, User, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Lock, User, AlertCircle } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { auth } from '../firebaseConfig';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -10,6 +11,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [logoError, setLogoError] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -56,8 +58,19 @@ const Login = () => {
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
             <div className="mx-auto mb-6 flex justify-center items-center">
-               <div className="bg-bde-navy p-5 rounded-full shadow-lg">
-                 <ShieldCheck size={48} className="text-bde-rose" />
+               <div className="w-24 h-24 bg-white rounded-full shadow-lg flex items-center justify-center overflow-hidden border-4 border-bde-navy/10 p-1">
+                 {!logoError ? (
+                    <img 
+                        src="/logo.png?v=4" 
+                        alt="Logo BDE" 
+                        className="w-full h-full object-cover rounded-full"
+                        onError={() => setLogoError(true)}
+                    />
+                 ) : (
+                    <div className="bg-bde-navy w-full h-full flex items-center justify-center">
+                        <span className="text-white font-bold text-2xl">BDE</span>
+                    </div>
+                 )}
                </div>
             </div>
             <h2 className="text-2xl font-bold text-gray-800">Espace Administrateur</h2>
@@ -79,11 +92,11 @@ const Login = () => {
                   <User size={18} className="text-gray-400" />
                 </div>
                 <input
-                  type="text" // Type text pour permettre "admin" en fallback, sinon "email"
+                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition"
-                  placeholder="utilisateur@exemple.com"
+                  placeholder="nom.prenom@ifran.com"
                   required
                 />
               </div>

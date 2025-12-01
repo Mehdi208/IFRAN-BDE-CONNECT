@@ -3,13 +3,14 @@ import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
 import { Member } from '../../types';
-import { Plus, Trash2, Edit, X, User, Upload } from 'lucide-react';
+import { Plus, Trash2, Edit, X, User, Upload, Loader } from 'lucide-react';
 
 const AdminMembers = () => {
   const [members, setMembers] = useState<Member[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
@@ -45,14 +46,19 @@ const AdminMembers = () => {
     setIsModalOpen(true);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      setIsUploading(true);
+      try {
+        const url = await dataService.uploadImage(file);
+        setPhotoUrl(url);
+      } catch (error) {
+        console.error("Erreur lors de l'envoi de l'image:", error);
+        alert("Une erreur est survenue lors de l'envoi de l'image. Assurez-vous d'avoir activé Storage sur Firebase.");
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
@@ -154,18 +160,23 @@ const AdminMembers = () => {
               <div className="border-t pt-4 mt-2">
                 <label className="block text-sm font-bold mb-2 text-gray-700">Photo de profil</label>
                 <div className="space-y-3">
-                    <input type="text" placeholder="URL directe (optionnel)" className={inputStyle} value={photoUrl} onChange={e => setPhotoUrl(e.target.value)} />
+                    <input type="text" placeholder="URL directe (ou importez ci-dessous)" className={inputStyle} value={photoUrl} onChange={e => setPhotoUrl(e.target.value)} />
                     
                     <div className="relative border-2 border-dashed border-gray-300 rounded-lg p-3 text-center hover:bg-gray-50 transition cursor-pointer">
-                        <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={isUploading} />
                         <div className="flex items-center justify-center gap-2 text-gray-500">
-                           <Upload size={16} /> <span className="text-sm">Importer depuis l'appareil</span>
+                           {isUploading ? (
+                              <Loader size={16} className="animate-spin" />
+                           ) : (
+                              <Upload size={16} />
+                           )}
+                           <span className="text-sm">{isUploading ? "Chargement..." : "Importer depuis l'appareil"}</span>
                         </div>
                     </div>
                 </div>
               </div>
 
-              <button type="submit" className="w-full bg-bde-navy text-white py-3 rounded-lg font-bold hover:bg-blue-900 transition shadow-lg mt-4">
+              <button type="submit" className="w-full bg-bde-navy text-white py-3 rounded-lg font-bold hover:bg-blue-900 transition shadow-lg mt-4" disabled={isUploading}>
                 Sauvegarder
               </button>
             </form>

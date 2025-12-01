@@ -1,9 +1,11 @@
+
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Calendar, Users, GraduationCap, UserPlus } from 'lucide-react';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [logoError, setLogoError] = useState(false);
   const location = useLocation();
 
   const links = [
@@ -22,8 +24,23 @@ const Navbar = () => {
         <div className="flex justify-between h-20">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center gap-4 group">
-              {/* Text Only Branding */}
-              <div className="border-l-4 border-bde-rose pl-3 py-1">
+              
+              {/* Logo Circle */}
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg overflow-hidden border-2 border-bde-rose/50 transition-transform group-hover:scale-105">
+                {!logoError ? (
+                    <img 
+                        src="/logo.png?v=4" 
+                        alt="Logo BDE" 
+                        className="w-full h-full object-cover"
+                        onError={() => setLogoError(true)}
+                    />
+                ) : (
+                    <span className="text-bde-navy font-bold text-xs">BDE</span>
+                )}
+              </div>
+
+              {/* Text Branding with Red Line */}
+              <div className="border-l-2 border-bde-rose pl-3 py-1">
                 <span className="text-white font-extrabold text-xl sm:text-2xl tracking-wider uppercase block leading-none group-hover:text-gray-200 transition-colors">
                   BDE IFRAN
                 </span>
