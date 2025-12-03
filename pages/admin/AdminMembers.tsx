@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
 import { Member } from '../../types';
-import { Plus, Trash2, Edit, X, User, Upload, Loader } from 'lucide-react';
+import { Plus, Trash2, Edit, X, User, Upload, Loader, GripVertical, Save } from 'lucide-react';
 
 const AdminMembers = () => {
   const [members, setMembers] = useState<Member[]>([]);
@@ -11,6 +11,8 @@ const AdminMembers = () => {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isOrderChanged, setIsOrderChanged] = useState(false);
+  const [isLoadingSave, setIsLoadingSave] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
@@ -51,11 +53,11 @@ const AdminMembers = () => {
     if (file) {
       setIsUploading(true);
       try {
-        const url = await dataService.uploadImage(file);
-        setPhotoUrl(url);
-      } catch (error) {
-        console.error("Erreur lors de l'envoi de l'image:", error);
-        alert("Une erreur est survenue lors de l'envoi de l'image. Assurez-vous d'avoir activé Storage sur Firebase.");
+        const compressedUrl = await dataService.uploadImage(file);
+        setPhotoUrl(compressedUrl);
+      } catch (error: any) {
+        console.error("Erreur d'upload:", error);
+        alert(`Une erreur est survenue lors du traitement de l'image: ${error.message}`);
       } finally {
         setIsUploading(false);
       }
@@ -63,9 +65,52 @@ const AdminMembers = () => {
   };
 
   const handleConfirmDelete = async (id: string) => {
-    const newList = await dataService.deleteMember(id);
-    setMembers(newList);
+    await dataService.deleteMember(id);
+    loadData(); // Refetch to get the correct order after deletion
     setDeleteConfirmId(null);
+  };
+  
+  const handleSaveOrder = async () => {
+    setIsLoadingSave(true);
+    await dataService.updateMembersOrder(members);
+    setIsOrderChanged(false);
+    setIsLoadingSave(false);
+    loadData(); // Refetch to confirm order
+  };
+
+  const onDragStart = (e: React.DragEvent<HTMLTableRowElement>, index: number) => {
+    e.dataTransfer.setData("text/plain", index.toString());
+    e.currentTarget.classList.add('bg-blue-50', 'shadow-lg');
+  };
+
+  const onDragOver = (e: React.DragEvent<HTMLTableRowElement>) => {
+    e.preventDefault();
+  };
+  
+  const onDrop = (e: React.DragEvent<HTMLTableRowElement>, dropIndex: number) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove('border-t-2', 'border-bde-rose');
+    const dragIndex = parseInt(e.dataTransfer.getData("text/plain"));
+    if (dragIndex === dropIndex) return;
+
+    const reorderedMembers = [...members];
+    const [draggedItem] = reorderedMembers.splice(dragIndex, 1);
+    reorderedMembers.splice(dropIndex, 0, draggedItem);
+
+    setMembers(reorderedMembers);
+    setIsOrderChanged(true);
+  };
+
+  const onDragEnter = (e: React.DragEvent<HTMLTableRowElement>) => {
+      e.currentTarget.classList.add('border-t-2', 'border-bde-rose');
+  };
+  
+  const onDragLeave = (e: React.DragEvent<HTMLTableRowElement>) => {
+      e.currentTarget.classList.remove('border-t-2', 'border-bde-rose');
+  };
+  
+  const onDragEnd = (e: React.DragEvent<HTMLTableRowElement>) => {
+      e.currentTarget.classList.remove('bg-blue-50', 'shadow-lg');
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -74,40 +119,67 @@ const AdminMembers = () => {
         const updated = {
             ...editingMember, name, role, whatsapp, photoUrl
         };
-        const newList = await dataService.updateMember(updated);
-        setMembers(newList);
+        await dataService.updateMember(updated);
     } else {
-        const newMember = {
+        await dataService.addMember({
             name, role, whatsapp, photoUrl
-        };
-        const newList = await dataService.addMember(newMember);
-        setMembers(newList);
+        });
     }
+    loadData();
     setIsModalOpen(false);
   };
 
   return (
     <AdminLayout>
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-800">Gestion des Membres</h2>
-        <button onClick={() => openModal()} className="flex items-center gap-2 bg-bde-rose text-white px-4 py-2 rounded-lg hover:bg-rose-600 transition shadow-lg">
-          <Plus size={18} /> Ajouter un membre
-        </button>
+        <div>
+            <h2 className="text-2xl font-bold text-gray-800">Gestion des Membres</h2>
+            <p className="text-sm text-gray-500">Glissez-déposez les lignes pour réorganiser l'ordre d'affichage.</p>
+        </div>
+        <div className="flex gap-2">
+            {isOrderChanged && (
+                <button 
+                    onClick={handleSaveOrder} 
+                    disabled={isLoadingSave}
+                    className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition shadow-lg disabled:opacity-50"
+                >
+                    {isLoadingSave ? <Loader size={18} className="animate-spin" /> : <Save size={18} />} 
+                    Sauvegarder l'ordre
+                </button>
+            )}
+            <button onClick={() => openModal()} className="flex items-center gap-2 bg-bde-rose text-white px-4 py-2 rounded-lg hover:bg-rose-600 transition shadow-lg">
+                <Plus size={18} /> Ajouter un membre
+            </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-left">
            <thead className="bg-gray-50 text-gray-500 text-sm">
              <tr>
+               <th className="p-4 w-12"></th>
                <th className="p-4">Membre</th>
                <th className="p-4">Rôle</th>
                <th className="p-4">WhatsApp</th>
                <th className="p-4 text-right">Actions</th>
              </tr>
            </thead>
-           <tbody className="divide-y divide-gray-100">
-             {members.map(member => (
-               <tr key={member.id} className="hover:bg-gray-50 transition">
+           <tbody>
+             {members.map((member, index) => (
+               <tr 
+                 key={member.id} 
+                 draggable
+                 onDragStart={(e) => onDragStart(e, index)}
+                 onDragOver={onDragOver}
+                 onDrop={(e) => onDrop(e, index)}
+                 onDragEnter={onDragEnter}
+                 onDragLeave={onDragLeave}
+                 onDragEnd={onDragEnd}
+                 className="hover:bg-gray-50 transition border-t-2 border-transparent"
+               >
+                 <td className="p-4 w-12 text-center text-gray-400 cursor-grab active:cursor-grabbing">
+                    <GripVertical />
+                 </td>
                  <td className="p-4 flex items-center gap-3">
                     <img src={member.photoUrl} alt="" className="w-10 h-10 rounded-full object-cover bg-gray-200 border" />
                     <span className="font-bold text-gray-800">{member.name}</span>
@@ -170,7 +242,7 @@ const AdminMembers = () => {
                            ) : (
                               <Upload size={16} />
                            )}
-                           <span className="text-sm">{isUploading ? "Chargement..." : "Importer depuis l'appareil"}</span>
+                           <span className="text-sm">{isUploading ? "Compression..." : "Importer & Compresser"}</span>
                         </div>
                     </div>
                 </div>

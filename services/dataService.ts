@@ -1,25 +1,25 @@
 
-import { db, storage } from '../firebaseConfig';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Club, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord, EventRegistration } from '../types';
+import { db } from '../firebaseConfig'; // storage import removed
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, writeBatch } from 'firebase/firestore';
+// Firebase Storage imports removed
+import { Club, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord } from '../types';
 
 export const CINEMA_CLUB_ID = 'club-cinema-bde';
 
 // --- MOCK DATA (Fallback) ---
 export const MOCK_MEMBERS: Member[] = [
-  { id: '1', name: 'Méhdi Traoré', role: 'Président', photoUrl: 'https://ui-avatars.com/api/?name=Mehdi+Traore&background=0F1E3A&color=fff', whatsapp: '2250789609672' },
-  { id: '2', name: 'Poste Vacant', role: 'Vice-président', photoUrl: 'https://ui-avatars.com/api/?name=VP&background=eee&color=999', whatsapp: '225' },
-  { id: '3', name: 'Ouattara Wendy', role: 'Secrétaire Générale', photoUrl: 'https://ui-avatars.com/api/?name=Ouattara+Wendy&background=E74A67&color=fff', whatsapp: '2250769275305' },
-  { id: '4', name: 'Kouadio Eden', role: 'Trésorière', photoUrl: 'https://ui-avatars.com/api/?name=Kouadio+Eden&background=0F1E3A&color=fff', whatsapp: '2250104210117' },
-  { id: '5', name: 'Kadiatou Diallo', role: 'Resp. Com & Médias', photoUrl: 'https://ui-avatars.com/api/?name=Kadiatou+Diallo&background=E74A67&color=fff', whatsapp: '2250779534720' },
-  { id: '6', name: 'Bazzé Aurélia', role: 'Resp. Événementiel', photoUrl: 'https://ui-avatars.com/api/?name=Bazze+Aurelia&background=0F1E3A&color=fff', whatsapp: '2250566868795' },
-  { id: '7', name: 'Nasser Darine', role: 'Resp. Affaires Sociales', photoUrl: 'https://ui-avatars.com/api/?name=Nasser+Darine&background=E74A67&color=fff', whatsapp: '2250574406161' },
-  { id: '8', name: 'Koffi Jean Philippe', role: 'Resp. Logistique', photoUrl: 'https://ui-avatars.com/api/?name=Koffi+Jean&background=0F1E3A&color=fff', whatsapp: '2250708878659' },
-  { id: '9', name: 'EL HAGE Mohamed', role: 'Représentant Prépa 1', photoUrl: 'https://ui-avatars.com/api/?name=El+Hage&background=E74A67&color=fff', whatsapp: '2250101013102' },
-  { id: '10', name: 'Joas Phamuel', role: 'Représentant Prépa 1', photoUrl: 'https://ui-avatars.com/api/?name=Joas+Phamuel&background=0F1E3A&color=fff', whatsapp: '14388692832' },
-  { id: '11', name: 'Kouassi Jemima', role: 'Resp. Clubs Étudiants', photoUrl: 'https://ui-avatars.com/api/?name=Kouassi+Jemima&background=E74A67&color=fff', whatsapp: '2250140152020' },
-  { id: '12', name: 'Abraham Vandoli', role: 'Représentant B2', photoUrl: 'https://ui-avatars.com/api/?name=Abraham+Vandoli&background=0F1E3A&color=fff', whatsapp: '2250787381250' },
+  { id: '1', name: 'Méhdi Traoré', role: 'Président', photoUrl: 'https://ui-avatars.com/api/?name=Mehdi+Traore&background=0F1E3A&color=fff', whatsapp: '2250789609672', orderIndex: 1 },
+  { id: '2', name: 'Poste Vacant', role: 'Vice-président', photoUrl: 'https://ui-avatars.com/api/?name=VP&background=eee&color=999', whatsapp: '225', orderIndex: 2 },
+  { id: '3', name: 'Ouattara Wendy', role: 'Secrétaire Générale', photoUrl: 'https://ui-avatars.com/api/?name=Ouattara+Wendy&background=E74A67&color=fff', whatsapp: '2250769275305', orderIndex: 3 },
+  { id: '4', name: 'Kouadio Eden', role: 'Trésorière', photoUrl: 'https://ui-avatars.com/api/?name=Kouadio+Eden&background=0F1E3A&color=fff', whatsapp: '2250104210117', orderIndex: 4 },
+  { id: '5', name: 'Kadiatou Diallo', role: 'Resp. Com & Médias', photoUrl: 'https://ui-avatars.com/api/?name=Kadiatou+Diallo&background=E74A67&color=fff', whatsapp: '2250779534720', orderIndex: 5 },
+  { id: '6', name: 'Bazzé Aurélia', role: 'Resp. Événementiel', photoUrl: 'https://ui-avatars.com/api/?name=Bazze+Aurelia&background=0F1E3A&color=fff', whatsapp: '2250566868795', orderIndex: 6 },
+  { id: '7', name: 'Nasser Darine', role: 'Resp. Affaires Sociales', photoUrl: 'https://ui-avatars.com/api/?name=Nasser+Darine&background=E74A67&color=fff', whatsapp: '2250574406161', orderIndex: 7 },
+  { id: '8', name: 'Koffi Jean Philippe', role: 'Resp. Logistique', photoUrl: 'https://ui-avatars.com/api/?name=Koffi+Jean&background=0F1E3A&color=fff', whatsapp: '2250708878659', orderIndex: 8 },
+  { id: '9', name: 'EL HAGE Mohamed', role: 'Représentant Prépa 1', photoUrl: 'https://ui-avatars.com/api/?name=El+Hage&background=E74A67&color=fff', whatsapp: '2250101013102', orderIndex: 9 },
+  { id: '10', name: 'Joas Phamuel', role: 'Représentant Prépa 1', photoUrl: 'https://ui-avatars.com/api/?name=Joas+Phamuel&background=0F1E3A&color=fff', whatsapp: '14388692832', orderIndex: 10 },
+  { id: '11', name: 'Kouassi Jemima', role: 'Resp. Clubs Étudiants', photoUrl: 'https://ui-avatars.com/api/?name=Kouassi+Jemima&background=E74A67&color=fff', whatsapp: '2250140152020', orderIndex: 11 },
+  { id: '12', name: 'Abraham Vandoli', role: 'Représentant B2', photoUrl: 'https://ui-avatars.com/api/?name=Abraham+Vandoli&background=0F1E3A&color=fff', whatsapp: '2250787381250', orderIndex: 12 },
 ];
 
 export const MOCK_CLUBS: Club[] = [
@@ -140,7 +140,7 @@ const getAll = async <T>(collectionName: string, mockData: T[]): Promise<T[]> =>
 const addOne = async <T>(collectionName: string, item: any, mockData: T[]): Promise<T[]> => {
     if (db) {
         await addDoc(collection(db, collectionName), item);
-        return getAll(collectionName, mockData);
+        return dataService.fetchClubs() as any; // Re-fetch all to ensure order is correct
     } else {
         const current = getFromStorage(collectionName, mockData) as any[];
         const newItem = { ...item, id: Date.now().toString() };
@@ -179,22 +179,78 @@ const deleteOne = async <T>(collectionName: string, id: string, mockData: T[]): 
 // --- EXPORTED SERVICE ---
 
 export const dataService = {
-  // Image Upload
-  uploadImage: async (file: File): Promise<string> => {
-    if (!storage) {
-        throw new Error("Firebase Storage n'est pas configuré.");
-    }
-    const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    return downloadURL;
+  // Image Upload with client-side compression
+  uploadImage: (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const MAX_WIDTH = 800;
+      const MAX_HEIGHT = 800;
+      const QUALITY = 0.8;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return reject(new Error('Impossible d\'obtenir le contexte du canvas.'));
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', QUALITY);
+          resolve(dataUrl);
+        };
+        img.onerror = (error) => reject(new Error("Erreur de chargement de l'image."));
+      };
+      reader.onerror = (error) => reject(new Error("Erreur de lecture du fichier."));
+      reader.readAsDataURL(file);
+    });
   },
 
   // Members
-  fetchMembers: () => getAll<Member>('members', MOCK_MEMBERS),
-  addMember: (member: Omit<Member, 'id'>) => addOne('members', member, MOCK_MEMBERS),
+  fetchMembers: async () => {
+    const data = await getAll<Member>('members', MOCK_MEMBERS);
+    return data.sort((a, b) => (a.orderIndex ?? 999) - (b.orderIndex ?? 999));
+  },
+  addMember: async (member: Omit<Member, 'id'>) => {
+    const allMembers = await dataService.fetchMembers();
+    const maxOrder = allMembers.reduce((max, m) => Math.max(max, m.orderIndex || 0), 0);
+    const newMemberWithOrder = { ...member, orderIndex: maxOrder + 1 };
+    return addOne('members', newMemberWithOrder, MOCK_MEMBERS);
+  },
   updateMember: (member: Member) => updateOne('members', member, MOCK_MEMBERS),
   deleteMember: (id: string) => deleteOne('members', id, MOCK_MEMBERS),
+  updateMembersOrder: async (members: Member[]) => {
+    const membersWithOrder = members.map((member, index) => ({...member, orderIndex: index}));
+    if (db) {
+        const batch = writeBatch(db);
+        membersWithOrder.forEach((member) => {
+            const docRef = doc(db, 'members', member.id);
+            batch.update(docRef, { orderIndex: member.orderIndex });
+        });
+        await batch.commit();
+    } else {
+        saveToStorage('members', membersWithOrder);
+    }
+  },
 
   // Clubs
   fetchClubs: () => getAll<Club>('clubs', MOCK_CLUBS),
@@ -227,56 +283,14 @@ export const dataService = {
     }
   },
 
+  deleteClubRegistration: (id: string) => deleteOne('club_registrations', id, []),
+
   // Events
   fetchEvents: () => getAll<Event>('events', MOCK_EVENTS),
   addEvent: (event: Omit<Event, 'id'>) => addOne('events', event, MOCK_EVENTS),
   updateEvent: (event: Event) => updateOne('events', event, MOCK_EVENTS),
   deleteEvent: (id: string) => deleteOne('events', id, MOCK_EVENTS),
   
-  // Event Registrations
-  addEventRegistration: async (registration: Omit<EventRegistration, 'id'>) => {
-    if (db) {
-       await addDoc(collection(db, 'event_registrations'), registration);
-       // Double inscription si c'est la soirée cinéma
-       if (registration.eventId === 'soiree-cinema-dec12') {
-         const clubRegistrationData = {
-           clubId: CINEMA_CLUB_ID,
-           studentName: registration.studentName,
-           studentLevel: registration.studentLevel,
-           studentWhatsapp: registration.studentWhatsapp,
-           date: new Date().toISOString()
-         };
-         await addDoc(collection(db, 'club_registrations'), clubRegistrationData);
-       }
-    } else {
-       // Mode LocalStorage
-       const currentEventRegs = getFromStorage('event_registrations', []) as any[];
-       const newEventReg = { ...registration, id: `evt-${Date.now()}` };
-       saveToStorage('event_registrations', [...currentEventRegs, newEventReg]);
-
-       if (registration.eventId === 'soiree-cinema-dec12') {
-         const currentClubRegs = getFromStorage('club_registrations', []) as any[];
-         const newClubReg = {
-           clubId: CINEMA_CLUB_ID,
-           studentName: registration.studentName,
-           studentLevel: registration.studentLevel,
-           studentWhatsapp: registration.studentWhatsapp,
-           date: new Date().toISOString(),
-           id: `club-${Date.now()}`
-         };
-         saveToStorage('club_registrations', [...currentClubRegs, newClubReg]);
-       }
-    }
-  },
-  fetchEventRegistrations: async (eventId: string) => {
-    if (db) {
-      const q = query(collection(db, 'event_registrations'), where("eventId", "==", eventId));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventRegistration));
-    }
-    return [];
-  },
-
   // Students (Cotisations)
   fetchStudents: () => getAll<Student>('students', MOCK_STUDENTS),
   addStudent: (student: Omit<Student, 'id'>) => addOne('students', student, MOCK_STUDENTS),

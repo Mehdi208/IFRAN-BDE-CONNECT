@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
 import { Club, ClubRegistration } from '../../types';
-import { Plus, Trash2, Edit, MessageCircle, X, Check, Users, Eye } from 'lucide-react';
+import { Plus, Trash2, Edit, MessageCircle, X, Check, Users, Eye, PlusCircle } from 'lucide-react';
 
 const AdminClubs = () => {
   const [clubs, setClubs] = useState<Club[]>([]);
@@ -14,6 +14,13 @@ const AdminClubs = () => {
   // Registration View State
   const [viewingRegistrations, setViewingRegistrations] = useState<string | null>(null); // Club ID
   const [registrations, setRegistrations] = useState<ClubRegistration[]>([]);
+  const [regDeleteConfirmId, setRegDeleteConfirmId] = useState<string | null>(null);
+
+  // Add Member to Club State
+  const [showAddMemberForm, setShowAddMemberForm] = useState(false);
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberLevel, setNewMemberLevel] = useState('Prépa 1');
+  const [isAddingMember, setIsAddingMember] = useState(false);
   
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -27,6 +34,8 @@ const AdminClubs = () => {
 
   const inputStyle = "w-full bg-bde-navy text-white border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition placeholder-gray-400";
   const textAreaStyle = "w-full bg-bde-navy text-white border border-gray-600 p-3 rounded-lg focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition h-24 resize-none placeholder-gray-400";
+  const levels = ["Prépa 1", "Prépa 2", "B2 COM", "B2 CREA", "B2 DEV", "B3 COM", "B3 CREA", "B3 DEV"];
+
 
   const loadData = async () => {
     const data = await dataService.fetchClubs();
@@ -90,6 +99,29 @@ const AdminClubs = () => {
     const regs = await dataService.fetchClubRegistrations(clubId);
     setRegistrations(regs);
   };
+
+  const handleAddMemberToClub = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!viewingRegistrations || !newMemberName) return;
+    setIsAddingMember(true);
+    await dataService.registerToClub({
+        clubId: viewingRegistrations,
+        studentName: newMemberName,
+        studentLevel: newMemberLevel,
+        date: new Date().toISOString()
+    });
+    // Refresh list and clear form
+    handleViewRegistrations(viewingRegistrations);
+    setNewMemberName('');
+    setShowAddMemberForm(false);
+    setIsAddingMember(false);
+  };
+
+  const handleDeleteRegistration = async (id: string) => {
+    await dataService.deleteClubRegistration(id);
+    handleViewRegistrations(viewingRegistrations!);
+    setRegDeleteConfirmId(null);
+  }
 
   return (
     <AdminLayout>
@@ -229,31 +261,43 @@ const AdminClubs = () => {
       {/* Modal Registrations List */}
       {viewingRegistrations && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[80vh] flex flex-col">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
                   <div className="flex justify-between items-center p-6 border-b bg-gray-50">
                     <h3 className="font-bold text-xl text-bde-navy flex items-center gap-2">
                         <Users /> Inscriptions : {clubs.find(c => c.id === viewingRegistrations)?.name}
                     </h3>
                     <button onClick={() => setViewingRegistrations(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                   </div>
-                  <div className="p-6 overflow-y-auto">
+                  <div className="p-6 overflow-y-auto flex-1">
                      {registrations.length > 0 ? (
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 text-gray-500 text-sm">
+                            <thead className="bg-gray-50 text-gray-500 text-sm sticky top-0">
                                 <tr>
-                                    <th className="p-3">Date</th>
                                     <th className="p-3">Étudiant</th>
                                     <th className="p-3">Niveau</th>
-                                    <th className="p-3">Contact</th>
+                                    <th className="p-3">Date d'inscription</th>
+                                    <th className="p-3 text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {registrations.map(reg => (
-                                    <tr key={reg.id}>
-                                        <td className="p-3 text-sm text-gray-500">{new Date(reg.date).toLocaleDateString()}</td>
+                                    <tr key={reg.id} className="hover:bg-gray-50">
                                         <td className="p-3 font-bold text-gray-800">{reg.studentName}</td>
-                                        <td className="p-3 text-sm">{reg.studentLevel}</td>
-                                        <td className="p-3 text-green-600 font-medium">{reg.studentWhatsapp}</td>
+                                        <td className="p-3 text-sm">
+                                            <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold">
+                                                {reg.studentLevel}
+                                            </span>
+                                        </td>
+                                        <td className="p-3 text-sm text-gray-500">
+                                            {new Date(reg.date).toLocaleDateString('fr-FR')}
+                                        </td>
+                                        <td className="p-3 text-right">
+                                            {regDeleteConfirmId === reg.id ? (
+                                                <button onClick={() => handleDeleteRegistration(reg.id)} className="text-xs bg-red-500 text-white px-2 py-1 rounded">Confirmer</button>
+                                            ) : (
+                                                <button onClick={() => { setRegDeleteConfirmId(reg.id); setTimeout(() => setRegDeleteConfirmId(null), 3000);}} className="text-gray-400 hover:text-red-500 p-2 transition"><Trash2 size={16}/></button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -261,6 +305,27 @@ const AdminClubs = () => {
                      ) : (
                          <div className="text-center py-10 text-gray-500">Aucune inscription pour le moment.</div>
                      )}
+                  </div>
+                  <div className="p-6 border-t bg-gray-50">
+                      {!showAddMemberForm ? (
+                          <button onClick={() => setShowAddMemberForm(true)} className="flex items-center gap-2 text-sm font-medium text-green-600 hover:text-green-700">
+                              <PlusCircle size={16}/> Ajouter un membre manuellement
+                          </button>
+                      ) : (
+                          <form onSubmit={handleAddMemberToClub} className="space-y-3 animate-fade-in">
+                              <h4 className="font-bold text-bde-navy">Ajouter un membre</h4>
+                              <div className="flex flex-col sm:flex-row gap-3">
+                                <input type="text" placeholder="Nom de l'étudiant" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} required className={inputStyle + " flex-1"}/>
+                                <select value={newMemberLevel} onChange={e => setNewMemberLevel(e.target.value)} className={inputStyle + " flex-1"}>
+                                  {levels.map(l => <option key={l} value={l}>{l}</option>)}
+                                </select>
+                                <button type="submit" disabled={isAddingMember} className="bg-green-500 text-white px-4 rounded-lg font-bold hover:bg-green-600 transition disabled:opacity-50 flex justify-center items-center">
+                                    {isAddingMember ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : 'Ajouter'}
+                                </button>
+                                <button type="button" onClick={() => setShowAddMemberForm(false)} className="text-gray-500 p-2"><X size={18}/></button>
+                              </div>
+                          </form>
+                      )}
                   </div>
               </div>
           </div>

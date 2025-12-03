@@ -6,6 +6,7 @@ export interface Member {
   role: string;
   photoUrl: string;
   whatsapp: string;
+  orderIndex?: number; // Pour la réorganisation
 }
 
 export interface Club {
@@ -23,7 +24,6 @@ export interface ClubRegistration {
   clubId: string;
   studentName: string;
   studentLevel: string;
-  studentWhatsapp: string;
   date: string;
 }
 
@@ -35,16 +35,6 @@ export interface Event {
   description: string;
   imageUrl: string;
   status: 'upcoming' | 'past' | 'cancelled';
-}
-
-export interface EventRegistration {
-  id: string;
-  eventId: string;
-  eventName: string;
-  studentName: string;
-  studentLevel: string;
-  studentWhatsapp: string;
-  date: string;
 }
 
 export interface Student {

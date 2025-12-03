@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -7,7 +6,7 @@ import { dataService } from '../services/dataService';
 import { Event } from '../types';
 
 const EventCard: React.FC<{ event: Event }> = ({ event }) => (
-  <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-2xl transition-all duration-500 flex flex-col h-full border border-gray-100 animate-fade-in-up transform hover:-translate-y-1">
+  <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-2xl transition-all duration-500 flex flex-col h-full border border-gray-100 transform hover:-translate-y-1">
     <div className="h-48 overflow-hidden relative">
       <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors z-10"></div>
       <img 
@@ -36,7 +35,6 @@ const EventCard: React.FC<{ event: Event }> = ({ event }) => (
 );
 
 const VisualCalendar: React.FC<{ events: Event[] }> = ({ events }) => {
-  // Modification : Utiliser new Date() pour commencer au mois actuel
   const [currentDate, setCurrentDate] = useState(new Date()); 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -59,7 +57,7 @@ const VisualCalendar: React.FC<{ events: Event[] }> = ({ events }) => {
   };
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 mb-12 animate-fade-in-up hover:shadow-xl transition-shadow duration-300">
+    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 mb-12 reveal active hover:shadow-xl transition-shadow duration-300">
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-2xl font-bold text-bde-navy flex items-center gap-2">
             <span className="bg-bde-navy/5 p-2 rounded-lg"><CalIcon size={24}/></span>
@@ -91,14 +89,14 @@ const VisualCalendar: React.FC<{ events: Event[] }> = ({ events }) => {
               key={day} 
               className={`h-24 border rounded-lg p-2 relative transition-all hover:shadow-md 
                 ${isToday 
-                  ? 'bg-red-50 border-bde-rose shadow-md' // Modification : Couleur de fond pour aujourd'hui
+                  ? 'bg-red-50 border-bde-rose shadow-md' 
                   : 'bg-white border-gray-100 hover:border-bde-rose/30'
                 }`}
             >
               <span 
                 className={`text-sm font-semibold inline-block w-6 h-6 text-center leading-6 rounded-full 
                   ${isToday 
-                    ? 'bg-bde-rose text-white shadow-sm' // Modification : Couleur de la bulle jour pour aujourd'hui
+                    ? 'bg-bde-rose text-white shadow-sm'
                     : 'text-gray-700'
                   }`}
               >
@@ -127,6 +125,27 @@ const CalendarPage = () => {
     load();
   }, []);
 
+  // Hook pour déclencher les animations au scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('active');
+        }
+      });
+    }, { 
+      threshold: 0.1,
+      rootMargin: "0px 0px -50px 0px"
+    });
+
+    const hiddenElements = document.querySelectorAll('.reveal');
+    hiddenElements.forEach((el) => observer.observe(el));
+
+    return () => {
+      hiddenElements.forEach((el) => observer.unobserve(el));
+    };
+  }, [events]); // Redéclenche quand les événements sont chargés
+
   const upcomingEvents = events.filter(e => e.status === 'upcoming');
   const pastEvents = events.filter(e => e.status === 'past');
 
@@ -135,7 +154,7 @@ const CalendarPage = () => {
       <Navbar />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center mb-16 animate-fade-in-up">
+        <div className="text-center mb-16 reveal active">
           <h1 className="text-4xl font-bold text-bde-navy mb-4">Agenda des Activités</h1>
           <p className="text-gray-600 max-w-2xl mx-auto">
             Retrouvez tous les événements marquants de l'année scolaire. Conférences, sport, fêtes et ateliers.
@@ -144,29 +163,37 @@ const CalendarPage = () => {
 
         <VisualCalendar events={events} />
 
-        <section className="mb-16 animate-fade-in-up" style={{animationDelay: '0.2s'}}>
-          <h2 className="text-2xl font-bold text-bde-navy mb-8 flex items-center gap-3">
+        <section className="mb-16">
+          <h2 className="text-2xl font-bold text-bde-navy mb-8 flex items-center gap-3 reveal active">
             <span className="w-2 h-8 bg-bde-rose rounded-full"></span>
             Événements à venir
           </h2>
           {upcomingEvents.length > 0 ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {upcomingEvents.map(event => <EventCard key={event.id} event={event} />)}
+              {upcomingEvents.map((event, idx) => (
+                <div key={event.id} className="reveal" style={{ transitionDelay: `${idx * 100}ms` }}>
+                  <EventCard event={event} />
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100 reveal">
               <p className="text-gray-500">Aucun événement prévu pour le moment.</p>
             </div>
           )}
         </section>
 
-        <section className="animate-fade-in-up" style={{animationDelay: '0.4s'}}>
-          <h2 className="text-2xl font-bold text-gray-400 mb-8 flex items-center gap-3">
+        <section>
+          <h2 className="text-2xl font-bold text-gray-400 mb-8 flex items-center gap-3 reveal active">
             <span className="w-2 h-8 bg-gray-300 rounded-full"></span>
             Historique
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 opacity-75 grayscale hover:grayscale-0 transition-all duration-500">
-            {pastEvents.map(event => <EventCard key={event.id} event={event} />)}
+            {pastEvents.map((event, idx) => (
+              <div key={event.id} className="reveal" style={{ transitionDelay: `${idx * 100}ms` }}>
+                <EventCard event={event} />
+              </div>
+            ))}
           </div>
         </section>
       </div>
