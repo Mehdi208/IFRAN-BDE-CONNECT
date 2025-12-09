@@ -229,98 +229,137 @@ export const generateEmailPDF = (data: EmailData) => {
     doc.save(`Demande_Validation_${evtName.replace(/\s+/g, '_')}.pdf`);
   };
 
-  export const generateMeetingPDF = (data: MeetingData) => {
+export const generateMeetingPDF = (data: MeetingData) => {
     const doc = new jsPDF();
     const { meetDate, meetTime, meetPlace, meetPresent, meetAbsent, meetAgenda, meetPoints, meetDecisions } = data;
     
-    // Title
-    doc.setFillColor(15, 30, 58); // Navy
-    doc.rect(0, 0, 210, 30, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.text("COMPTE RENDU – RÉUNION DU BDE IFRAN", 105, 20, { align: 'center' });
-    
-    doc.setTextColor(0);
-    doc.setFontSize(11);
-    let y = 45;
-    
-    doc.text(`Date : ${meetDate}`, 20, y);
-    doc.text(`Heure : ${meetTime}`, 80, y);
-    doc.text(`Lieu : ${meetPlace}`, 140, y);
-    y += 10;
-    
-    doc.text(`Présents : ${meetPresent}`, 20, y); y+=7;
-    doc.text(`Absents : ${meetAbsent}`, 20, y); y+=15;
-    
-    const addSection = (title: string, content: string) => {
-        doc.setFillColor(231, 74, 103); // Rose
-        doc.rect(20, y, 170, 8, 'F');
-        doc.setTextColor(255);
-        doc.setFont("helvetica", "bold");
-        doc.text(title, 25, y+6);
-        y += 15;
-        doc.setTextColor(0);
-        doc.setFont("helvetica", "normal");
-        
-        const lines = content.split('\n');
-        lines.forEach(line => {
-            doc.text(`• ${line}`, 25, y);
-            y += 7;
-        });
-        y += 5;
+    const maxWidth = 170;
+    const margin = 20;
+    const pageHeight = doc.internal.pageSize.height;
+    let y = 20;
+
+    // Helper for page breaks
+    const checkHeight = (height: number) => {
+        if (y + height > pageHeight - margin) {
+            doc.addPage();
+            y = 20;
+            return true;
+        }
+        return false;
     };
+
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(0, 51, 153);
+    doc.text("COMPTE RENDU DE RÉUNION", 105, y, { align: 'center' });
+    y += 20;
+
+    // Info Block
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+
+    const infos = [
+        [`Date : ${new Date(meetDate).toLocaleDateString('fr-FR')}`, `Heure : ${meetTime}`],
+        [`Lieu : ${meetPlace}`, ``],
+        [`Présents : ${meetPresent}`, ``],
+        [`Absents : ${meetAbsent}`, ``]
+    ];
+
+    infos.forEach(row => {
+        const text = row[0] + (row[1] ? "   |   " + row[1] : "");
+        const lines = doc.splitTextToSize(text, maxWidth);
+        doc.text(lines, margin, y);
+        y += (lines.length * 6) + 4;
+    });
     
-    addSection("1. Ordre du jour", meetAgenda);
-    addSection("2. Points discutés", meetPoints);
-    addSection("3. Décisions prises", meetDecisions);
-    
+    y += 5;
+
+    // Generic Section Renderer
+    const renderSection = (title: string, content: string) => {
+        checkHeight(20);
+        
+        // Header background
+        doc.setFillColor(240, 240, 240);
+        doc.rect(margin, y, maxWidth, 8, 'F');
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(0, 51, 153);
+        doc.text(title.toUpperCase(), margin + 2, y + 5.5);
+        y += 14;
+
+        // Content
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        doc.setTextColor(0);
+        
+        const lines = doc.splitTextToSize(content || 'Néant', maxWidth);
+        
+        lines.forEach((line: string) => {
+            if (checkHeight(7)) {
+                y += 5; // margin top after new page
+            }
+            doc.text(line, margin, y);
+            y += 6;
+        });
+        
+        y += 8; // Spacing after section
+    };
+
+    renderSection("Ordre du jour", meetAgenda);
+    renderSection("Points discutés", meetPoints);
+    renderSection("Décisions prises", meetDecisions);
+
+    // Footer
+    checkHeight(20);
     y += 10;
-    doc.setFont("helvetica", "bold");
-    doc.text("Traoré Abdou-Rahmane Méhdi", 130, y); y+=6;
-    doc.setFontSize(10);
-    doc.text("Président BDE IFRAN", 130, y);
-    
-    doc.save(`Compte_Rendu_${meetDate}.pdf`);
-  };
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.setFont("helvetica", "italic");
+    doc.text("Généré via BDE Connect IFRAN", 105, y, { align: 'center' });
 
-  export const generateFinanceReport = (students: Student[], dateRange: { start: string, end: string }) => {
-     
-     const start = new Date(dateRange.start);
-     const end = new Date(dateRange.end);
-     end.setHours(23, 59, 59);
+    doc.save(`CR_Reunion_${meetDate}.pdf`);
+};
 
-     const filteredStudents = students.filter(s => {
-         if(!s.paymentDate) return false;
-         const pDate = new Date(s.paymentDate);
-         return pDate >= start && pDate <= end;
-     });
+export const generateFinanceReport = (students: Student[], range: { start: string; end: string }) => {
+  const doc = new jsPDF();
+  const start = new Date(range.start);
+  const end = new Date(range.end);
+  end.setHours(23, 59, 59);
 
-     const totalCollected = filteredStudents.reduce((acc, s) => acc + (s.amount || 0), 0);
+  const filtered = students.filter((s) => {
+    if (!s.hasPaid || !s.paymentDate) return false;
+    const d = new Date(s.paymentDate);
+    return d >= start && d <= end;
+  });
 
-     const doc = new jsPDF();
-     
-     doc.setFontSize(20);
-     doc.text("Bilan Financier BDE", 105, 20, { align: 'center' });
-     
-     doc.setFontSize(12);
-     doc.text(`Période du : ${dateRange.start} au ${dateRange.end}`, 105, 30, { align: 'center' });
-     
-     doc.text(`Total Collecté sur la période : ${totalCollected.toLocaleString()} FCFA`, 20, 50);
+  const total = filtered.reduce((acc, s) => acc + (s.amount || 0), 0);
 
-     const tableBody = filteredStudents.map(s => [
-        s.paymentDate,
-        s.name,
-        s.level,
-        `${s.amount} FCFA`
-     ]);
-     
-     autoTable(doc, {
-        startY: 60,
-        head: [['Date', 'Étudiant', 'Niveau', 'Montant']],
-        body: tableBody,
-        theme: 'striped',
-        headStyles: { fillColor: [15, 30, 58] }
-     });
-     
-     doc.save(`Bilan_Financier_${dateRange.start}_${dateRange.end}.pdf`);
-  };
+  doc.setFontSize(22);
+  doc.setTextColor(15, 30, 58); // Navy
+  doc.text('Bilan Financier', 105, 20, { align: 'center' });
+
+  doc.setFontSize(12);
+  doc.setTextColor(0);
+  doc.text(`Période : ${new Date(range.start).toLocaleDateString('fr-FR')} - ${new Date(range.end).toLocaleDateString('fr-FR')}`, 14, 35);
+  doc.text(`Total Encaissé : ${total.toLocaleString()} FCFA`, 14, 42);
+  doc.text(`Nombre de transactions : ${filtered.length}`, 14, 49);
+
+  const tableData = filtered.map((s) => [
+    new Date(s.paymentDate!).toLocaleDateString('fr-FR'),
+    s.name,
+    s.level,
+    s.paymentType || '-',
+    `${s.amount} F`,
+  ]);
+
+  autoTable(doc, {
+    startY: 55,
+    head: [['Date', 'Étudiant', 'Niveau', 'Type', 'Montant']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: { fillColor: [15, 30, 58] },
+  });
+
+  doc.save(`Bilan_Financier_${range.start}_${range.end}.pdf`);
+};

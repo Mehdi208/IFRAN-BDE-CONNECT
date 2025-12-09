@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -7,12 +8,12 @@ import { Event } from '../types';
 
 const EventCard: React.FC<{ event: Event }> = ({ event }) => (
   <div className="group bg-white rounded-xl shadow-md overflow-hidden hover:shadow-2xl transition-all duration-500 flex flex-col h-full border border-gray-100 transform hover:-translate-y-1">
-    <div className="h-48 overflow-hidden relative">
+    <div className="overflow-hidden relative">
       <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors z-10"></div>
       <img 
         src={event.imageUrl} 
         alt={event.title} 
-        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+        className="w-full h-auto transition-transform duration-700 group-hover:scale-110"
       />
       <div className="absolute top-4 right-4 z-20 bg-white/95 backdrop-blur px-3 py-1 rounded-full text-xs font-bold text-bde-navy shadow-lg">
         {event.status === 'upcoming' ? 'À venir' : 'Terminé'}

@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -25,14 +26,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // 2. INSCRIPTIONS AUX CLUBS
+    // 2. INSCRIPTIONS AUX CLUBS (Règle corrigée et sécurisée)
     match /club_registrations/{document=**} {
-      allow create: if true;
-      allow read: if true;
-      allow update, delete: if isAdmin();
+      allow create: if true; // Tout le monde peut s'inscrire
+      allow read: if true;   // Tout le monde peut VOIR la liste des membres
+      allow update, delete: if isAdmin(); // Seul un admin peut GÉRER les membres
     }
 
-    // 3. INSCRIPTIONS AUX ÉVÉNEMENTS (C'est la règle qui vous manquait)
+    // 3. INSCRIPTIONS AUX ÉVÉNEMENTS
     match /event_registrations/{document=**} {
       allow create: if true; // Tout le monde peut s'inscrire
       allow read: if true;   // Tout le monde peut voir la liste

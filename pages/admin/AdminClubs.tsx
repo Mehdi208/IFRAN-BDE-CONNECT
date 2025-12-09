@@ -268,40 +268,42 @@ const AdminClubs = () => {
                     </h3>
                     <button onClick={() => setViewingRegistrations(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                   </div>
-                  <div className="p-6 overflow-y-auto flex-1">
+                  <div className="overflow-y-auto flex-1">
                      {registrations.length > 0 ? (
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50 text-gray-500 text-sm sticky top-0">
-                                <tr>
-                                    <th className="p-3">Étudiant</th>
-                                    <th className="p-3">Niveau</th>
-                                    <th className="p-3">Date d'inscription</th>
-                                    <th className="p-3 text-right">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {registrations.map(reg => (
-                                    <tr key={reg.id} className="hover:bg-gray-50">
-                                        <td className="p-3 font-bold text-gray-800">{reg.studentName}</td>
-                                        <td className="p-3 text-sm">
-                                            <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold">
-                                                {reg.studentLevel}
-                                            </span>
-                                        </td>
-                                        <td className="p-3 text-sm text-gray-500">
-                                            {new Date(reg.date).toLocaleDateString('fr-FR')}
-                                        </td>
-                                        <td className="p-3 text-right">
-                                            {regDeleteConfirmId === reg.id ? (
-                                                <button onClick={() => handleDeleteRegistration(reg.id)} className="text-xs bg-red-500 text-white px-2 py-1 rounded">Confirmer</button>
-                                            ) : (
-                                                <button onClick={() => { setRegDeleteConfirmId(reg.id); setTimeout(() => setRegDeleteConfirmId(null), 3000);}} className="text-gray-400 hover:text-red-500 p-2 transition"><Trash2 size={16}/></button>
-                                            )}
-                                        </td>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left min-w-[600px]">
+                                <thead className="bg-gray-50 text-gray-500 text-sm sticky top-0">
+                                    <tr>
+                                        <th className="p-3 whitespace-nowrap">Étudiant</th>
+                                        <th className="p-3 whitespace-nowrap">Niveau</th>
+                                        <th className="p-3 whitespace-nowrap">Date d'inscription</th>
+                                        <th className="p-3 text-right whitespace-nowrap">Action</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {registrations.map(reg => (
+                                        <tr key={reg.id} className="hover:bg-gray-50">
+                                            <td className="p-3 font-bold text-gray-800 whitespace-nowrap">{reg.studentName}</td>
+                                            <td className="p-3 text-sm whitespace-nowrap">
+                                                <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold">
+                                                    {reg.studentLevel}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-sm text-gray-500 whitespace-nowrap">
+                                                {new Date(reg.date).toLocaleDateString('fr-FR')}
+                                            </td>
+                                            <td className="p-3 text-right whitespace-nowrap">
+                                                {regDeleteConfirmId === reg.id ? (
+                                                    <button onClick={() => handleDeleteRegistration(reg.id)} className="text-xs bg-red-500 text-white px-2 py-1 rounded">Confirmer</button>
+                                                ) : (
+                                                    <button onClick={() => { setRegDeleteConfirmId(reg.id); setTimeout(() => setRegDeleteConfirmId(null), 3000);}} className="text-gray-400 hover:text-red-500 p-2 transition"><Trash2 size={16}/></button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                      ) : (
                          <div className="text-center py-10 text-gray-500">Aucune inscription pour le moment.</div>
                      )}

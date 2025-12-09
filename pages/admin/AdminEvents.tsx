@@ -122,8 +122,8 @@ const AdminEvents = () => {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {events.map(event => (
           <div key={event.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
-            <div className="h-40 overflow-hidden relative group">
-               <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover transition duration-500 group-hover:scale-110" />
+            <div className="overflow-hidden relative group">
+               <img src={event.imageUrl} alt={event.title} className="w-full h-auto transition duration-500 group-hover:scale-110" />
                <span className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded ${getStatusBadge(event.status)}`}>
                  {getStatusLabel(event.status)}
                </span>

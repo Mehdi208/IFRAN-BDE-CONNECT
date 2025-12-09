@@ -39,6 +39,29 @@ const AdminDashboard = () => {
     };
     loadData();
   }, []);
+  
+  // Hook pour déclencher les animations au scroll une fois les données chargées
+  useEffect(() => {
+    if (loading) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('active');
+        }
+      });
+    }, { 
+      threshold: 0.1,
+      rootMargin: "0px 0px -50px 0px"
+    });
+
+    const hiddenElements = document.querySelectorAll('.reveal');
+    hiddenElements.forEach((el) => observer.observe(el));
+
+    return () => {
+      hiddenElements.forEach((el) => observer.unobserve(el));
+    };
+  }, [loading]);
 
   // Filter Data based on Date Range
   const stats = useMemo(() => {
@@ -115,7 +138,7 @@ const AdminDashboard = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 reveal" style={{transitionDelay: '0ms'}}>
                 <div className="p-3 rounded-full bg-green-100 text-green-600">
                     <DollarSign size={24} />
                 </div>
@@ -125,7 +148,7 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 reveal" style={{transitionDelay: '100ms'}}>
                 <div className="p-3 rounded-full bg-blue-100 text-blue-600">
                     <Users size={24} />
                 </div>
@@ -135,7 +158,7 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 reveal" style={{transitionDelay: '200ms'}}>
                 <div className="p-3 rounded-full bg-purple-100 text-purple-600">
                     <Briefcase size={24} />
                 </div>
@@ -145,7 +168,7 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 reveal" style={{transitionDelay: '300ms'}}>
                 <div className="p-3 rounded-full bg-orange-100 text-orange-600">
                     <Calendar size={24} />
                 </div>
@@ -158,7 +181,7 @@ const AdminDashboard = () => {
 
         {/* Charts Section */}
         <div className="grid lg:grid-cols-2 gap-8">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 reveal" style={{transitionDelay: '400ms'}}>
                 <h3 className="font-bold text-lg text-gray-800 mb-6">Répartition des Étudiants par Niveau</h3>
                 <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -173,7 +196,7 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
-             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 reveal" style={{transitionDelay: '500ms'}}>
                 <h3 className="font-bold text-lg text-gray-800 mb-6">Statut des Paiements</h3>
                 <div className="h-64 flex items-center justify-center">
                     <ResponsiveContainer width="100%" height="100%">

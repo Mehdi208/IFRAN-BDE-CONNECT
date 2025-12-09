@@ -156,19 +156,19 @@ const AdminCinema = () => {
             {/* Date Filter Bar */}
             <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-200 shadow-sm flex-1 sm:flex-none">
                 <div className="text-gray-400 px-2"><Filter size={16} /></div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-center gap-2">
                     <input 
                         type="date" 
                         value={startDate} 
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="bg-bde-navy text-white text-sm px-3 py-1.5 rounded outline-none border border-transparent focus:border-bde-rose transition [color-scheme:dark]"
+                        className="bg-bde-navy text-white text-sm px-3 py-1.5 rounded outline-none border border-transparent focus:border-bde-rose transition [color-scheme:dark] w-full sm:w-auto"
                     />
-                    <span className="text-gray-400 font-bold">-</span>
+                    <span className="text-gray-400 font-bold hidden sm:block">-</span>
                     <input 
                         type="date" 
                         value={endDate} 
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="bg-bde-navy text-white text-sm px-3 py-1.5 rounded outline-none border border-transparent focus:border-bde-rose transition [color-scheme:dark]"
+                        className="bg-bde-navy text-white text-sm px-3 py-1.5 rounded outline-none border border-transparent focus:border-bde-rose transition [color-scheme:dark] w-full sm:w-auto"
                     />
                 </div>
                 {(startDate || endDate) && (
@@ -179,10 +179,10 @@ const AdminCinema = () => {
             </div>
 
             <div className="flex gap-2">
-                <button onClick={() => openModal()} className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition shadow-sm whitespace-nowrap">
+                <button onClick={() => openModal()} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition shadow-sm whitespace-nowrap">
                     <Plus size={18} /> Nouvelle Vente
                 </button>
-                <button onClick={() => generateCinemaReport(sortedSales)} className="flex items-center gap-2 bg-bde-navy text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition shadow-sm whitespace-nowrap">
+                <button onClick={() => generateCinemaReport(sortedSales)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-bde-navy text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition shadow-sm whitespace-nowrap">
                     <Download size={18} /> PDF
                 </button>
             </div>

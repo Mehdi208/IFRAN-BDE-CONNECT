@@ -153,8 +153,8 @@ const AdminMembers = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-left">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+        <table className="w-full text-left min-w-[700px]">
            <thead className="bg-gray-50 text-gray-500 text-sm">
              <tr>
                <th className="p-4 w-12"></th>
@@ -182,11 +182,11 @@ const AdminMembers = () => {
                  </td>
                  <td className="p-4 flex items-center gap-3">
                     <img src={member.photoUrl} alt="" className="w-10 h-10 rounded-full object-cover bg-gray-200 border" />
-                    <span className="font-bold text-gray-800">{member.name}</span>
+                    <span className="font-bold text-gray-800 whitespace-nowrap">{member.name}</span>
                  </td>
-                 <td className="p-4 text-sm text-gray-600">{member.role}</td>
-                 <td className="p-4 text-sm text-gray-500">{member.whatsapp}</td>
-                 <td className="p-4 text-right">
+                 <td className="p-4 text-sm text-gray-600 whitespace-nowrap">{member.role}</td>
+                 <td className="p-4 text-sm text-gray-500 whitespace-nowrap">{member.whatsapp}</td>
+                 <td className="p-4 text-right whitespace-nowrap">
                    <div className="flex justify-end gap-2">
                      <button type="button" onClick={() => openModal(member)} className="p-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"><Edit size={16}/></button>
                      

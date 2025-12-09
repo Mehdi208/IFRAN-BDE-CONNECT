@@ -89,6 +89,15 @@ export const MOCK_EVENTS: Event[] = [
     imageUrl: 'https://picsum.photos/800/400?random=11', 
     status: 'upcoming' 
   },
+  { 
+    id: '3', 
+    title: 'Séance Cinéma', 
+    date: '2025-12-12', 
+    location: 'Salle Polyvalente', 
+    description: 'Projection spéciale du film de la semaine. Popcorn et boissons en vente !', 
+    imageUrl: 'https://image.tmdb.org/t/p/original/uS7M2xK2hM0bS0Isc2b5a5k9TfI.jpg', // Affiche de Dune 2
+    status: 'upcoming' 
+  },
 ];
 
 export const MOCK_STUDENTS: Student[] = [
