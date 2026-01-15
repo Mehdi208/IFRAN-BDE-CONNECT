@@ -14,23 +14,18 @@ import Login from './pages/Login';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminContributions from './pages/admin/AdminContributions';
 import AdminClubs from './pages/admin/AdminClubs';
+import AdminAteliers from './pages/admin/AdminAteliers';
 import AdminDocuments from './pages/admin/AdminDocuments';
 import AdminEvents from './pages/admin/AdminEvents';
 import AdminMembers from './pages/admin/AdminMembers';
-import AdminCinema from './pages/admin/AdminCinema';
+import AdminMentors from './pages/admin/AdminMentors';
 
-// Composant utilitaire pour remonter en haut de page à chaque changement de route
 const ScrollToTop = () => {
   const { pathname } = useLocation();
-
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
-
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
   return null;
 };
 
-// Protected Route Wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
   return isAuthenticated ? children : <Navigate to="/login" replace />;
@@ -39,9 +34,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 function App() {
   return (
     <HashRouter>
-      <ScrollToTop /> {/* Ce composant écoute les changements de page */}
+      <ScrollToTop />
       <Routes>
-        {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/clubs" element={<Clubs />} />
@@ -49,14 +43,14 @@ function App() {
         <Route path="/team" element={<Team />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/contributions" element={<ProtectedRoute><AdminContributions /></ProtectedRoute>} />
         <Route path="/admin/clubs" element={<ProtectedRoute><AdminClubs /></ProtectedRoute>} />
+        <Route path="/admin/ateliers" element={<ProtectedRoute><AdminAteliers /></ProtectedRoute>} />
         <Route path="/admin/documents" element={<ProtectedRoute><AdminDocuments /></ProtectedRoute>} />
         <Route path="/admin/events" element={<ProtectedRoute><AdminEvents /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
-        <Route path="/admin/cinema" element={<ProtectedRoute><AdminCinema /></ProtectedRoute>} />
+        <Route path="/admin/mentors" element={<ProtectedRoute><AdminMentors /></ProtectedRoute>} />
         <Route path="/admin/*" element={<Navigate to="/admin/dashboard" />} />
       </Routes>
     </HashRouter>

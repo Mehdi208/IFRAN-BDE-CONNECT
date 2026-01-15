@@ -3,17 +3,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Fonction pour vérifier si l'utilisateur est connecté (Admin)
+    // Fonction pour vérifier si l'utilisateur est authentifié via Firebase Auth
     function isAdmin() {
       return request.auth != null;
     }
 
-    // 1. COLLECTIONS PUBLIQUES (Lecture pour tous, Écriture pour Admin)
+    // 1. COLLECTIONS PUBLIQUES (Lecture pour tous, Écriture restreinte)
     match /members/{document=**} {
       allow read: if true;
       allow write: if isAdmin();
     }
     match /clubs/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /ateliers/{document=**} {
       allow read: if true;
       allow write: if isAdmin();
     }
@@ -26,32 +30,30 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // 2. INSCRIPTIONS AUX CLUBS (Règle corrigée et sécurisée)
+    // 2. INSCRIPTIONS (Tout le monde peut s'inscrire, Admin peut gérer)
     match /club_registrations/{document=**} {
-      allow create: if true; // Tout le monde peut s'inscrire
-      allow read: if true;   // Tout le monde peut VOIR la liste des membres
-      allow update, delete: if isAdmin(); // Seul un admin peut GÉRER les membres
+      allow create: if true;
+      allow read: if true;
+      allow delete: if isAdmin();
+      allow update: if isAdmin();
     }
 
-    // 3. INSCRIPTIONS AUX ÉVÉNEMENTS
-    match /event_registrations/{document=**} {
-      allow create: if true; // Tout le monde peut s'inscrire
-      allow read: if true;   // Tout le monde peut voir la liste
-      allow update, delete: if isAdmin(); // Seul l'admin gère
-    }
-
-    // 4. COLLECTIONS PRIVÉES (Admin Uniquement)
-    match /students/{document=**} {
-      allow read, write: if isAdmin();
-    }
     match /cinema_sales/{document=**} {
+      allow create: if true;
+      allow read: if true;
+      allow delete: if isAdmin();
+      allow update: if isAdmin();
+    }
+
+    // 3. COLLECTIONS PRIVÉES (Admin Firebase uniquement)
+    match /students/{document=**} {
       allow read, write: if isAdmin();
     }
     match /documents/{document=**} {
       allow read, write: if isAdmin();
     }
 
-    // 5. SÉCURITÉ PAR DÉFAUT
+    // 4. SÉCURITÉ PAR DÉFAUT
     match /{document=**} {
       allow read, write: if false;
     }

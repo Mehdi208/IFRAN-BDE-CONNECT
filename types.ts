@@ -1,12 +1,11 @@
 
-
 export interface Member {
   id: string;
   name: string;
   role: string;
   photoUrl: string;
   whatsapp: string;
-  orderIndex?: number; // Pour la réorganisation
+  orderIndex?: number;
 }
 
 export interface Club {
@@ -16,15 +15,27 @@ export interface Club {
   leaderName: string;
   leaderWhatsapp: string;
   activities: string[];
-  emoji?: string; // Ajout du champ emoji
+  emoji?: string;
+}
+
+export interface Atelier {
+  id: string;
+  name: string;
+  description: string;
+  room: string;
+  emoji: string;
+  time?: string;
+  orderIndex?: number;
 }
 
 export interface ClubRegistration {
   id: string;
-  clubId: string;
+  clubId?: string;
+  atelierId?: string; // Référence à l'atelier indépendant
   studentName: string;
   studentLevel: string;
   date: string;
+  isAtelier?: boolean;
 }
 
 export interface Event {
@@ -40,7 +51,7 @@ export interface Event {
 export interface Student {
   id: string;
   name: string;
-  level: string; // e.g., "L1", "L2", "Master"
+  level: string;
   hasPaid: boolean;
   paymentType?: 'Mensuel' | 'Ponctuel' | 'Autre';
   paymentDate?: string;
@@ -52,24 +63,27 @@ export interface Mentor {
   name: string;
   subject: string;
   whatsapp: string;
+  orderIndex?: number;
 }
 
 export interface CinemaSale {
   id: string;
-  itemName: string; // Ex: Ticket, Popcorn, Boisson
+  itemName: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
   date: string;
-  buyerName?: string; // Optionnel
+  buyerName?: string;
+  seatId?: string;
+  status: 'paid' | 'reserved';
 }
 
 export interface DocumentRecord {
   id: string;
   type: 'email' | 'meeting' | 'finance';
   title: string;
-  date: string; // Date de génération
-  data: any; // Données JSON pour régénérer le PDF
+  date: string;
+  data: any;
 }
 
 export interface Stats {

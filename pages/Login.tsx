@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Lock, User, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { auth } from '../firebaseConfig';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -20,32 +20,43 @@ const Login = () => {
     setError('');
     setLoading(true);
 
-    // Vérification si Firebase Auth est configuré
-    if (!auth) {
-        // Fallback mode démo si Firebase mal configuré
-        if (email === 'admin' && password === 'admin') {
-            localStorage.setItem('isAuthenticated', 'true');
-            navigate('/admin/dashboard');
-        } else {
-            setError("Firebase Auth non configuré. En mode démo, utilisez admin/admin.");
+    // PRIORITÉ ABSOLUE : Contournement local pour le développement et la démo
+    if (email === 'admin' && password === 'admin') {
+        try {
+          // On force la déconnexion de Firebase pour être sûr qu'aucune règle de sécurité 
+          // cloud ne vienne bloquer les futures actions locales
+          if (auth) {
+              await signOut(auth);
+          }
+        } catch (e) {
+            console.warn("Échec de la déconnexion Firebase silencieuse", e);
         }
+        localStorage.setItem('isAuthenticated', 'true');
+        navigate('/admin/dashboard');
         setLoading(false);
         return;
     }
 
+    // Vérification si Firebase Auth est configuré pour les vrais comptes
+    if (!auth) {
+        setError("Firebase non configuré. Utilisez admin/admin pour la démo.");
+        setLoading(false);
+        return;
+    }
+
+    // Tentative de connexion via Firebase
     try {
-        await signInWithEmailAndPassword(auth, email, password);
-        // Si succès
+        const emailToTry = email.includes('@') ? email : `${email}@ifran.ci`;
+        await signInWithEmailAndPassword(auth, emailToTry, password);
+        
         localStorage.setItem('isAuthenticated', 'true');
         navigate('/admin/dashboard');
     } catch (err: any) {
         console.error("Erreur login:", err);
         if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-            setError('Email ou mot de passe incorrect.');
-        } else if (err.code === 'auth/too-many-requests') {
-            setError('Trop de tentatives. Veuillez patienter.');
+            setError('Identifiants incorrects. Note : Pour la démo locale, utilisez "admin" / "admin".');
         } else {
-            setError('Erreur de connexion. Vérifiez votre connexion internet.');
+            setError('Erreur système ou problème de connexion.');
         }
     } finally {
         setLoading(false);
@@ -75,7 +86,7 @@ const Login = () => {
                </div>
             </div>
             <h2 className="text-2xl font-bold text-gray-800">Espace Administrateur</h2>
-            <p className="text-gray-500 text-sm mt-2">Veuillez vous authentifier pour accéder au tableau de bord</p>
+            <p className="text-gray-500 text-sm mt-2">Accès restreint aux membres du bureau</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -87,17 +98,17 @@ const Login = () => {
             )}
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Identifiant</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <User size={18} className="text-gray-400" />
                 </div>
                 <input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition"
-                  placeholder="nom.prenom@ifran.com"
+                  placeholder="admin"
                   required
                 />
               </div>
@@ -121,7 +132,6 @@ const Login = () => {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
-                  aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>

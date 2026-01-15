@@ -1,124 +1,29 @@
 
-import { db } from '../firebaseConfig'; // storage import removed
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, writeBatch } from 'firebase/firestore';
-// Firebase Storage imports removed
-import { Club, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord } from '../types';
+import { db, auth } from '../firebaseConfig';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, writeBatch, getDoc } from 'firebase/firestore';
+import { Club, Atelier, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord } from '../types';
 
-export const CINEMA_CLUB_ID = 'club-cinema-bde';
+export const CINEMA_CLUB_ID = 'atelier-cinema-default';
 
-// --- MOCK DATA (Fallback) ---
-export const MOCK_MEMBERS: Member[] = [
-  { id: '1', name: 'Méhdi Traoré', role: 'Président', photoUrl: 'https://ui-avatars.com/api/?name=Mehdi+Traore&background=0F1E3A&color=fff', whatsapp: '2250789609672', orderIndex: 1 },
-  { id: '2', name: 'Poste Vacant', role: 'Vice-président', photoUrl: 'https://ui-avatars.com/api/?name=VP&background=eee&color=999', whatsapp: '225', orderIndex: 2 },
-  { id: '3', name: 'Ouattara Wendy', role: 'Secrétaire Générale', photoUrl: 'https://ui-avatars.com/api/?name=Ouattara+Wendy&background=E74A67&color=fff', whatsapp: '2250769275305', orderIndex: 3 },
-  { id: '4', name: 'Kouadio Eden', role: 'Trésorière', photoUrl: 'https://ui-avatars.com/api/?name=Kouadio+Eden&background=0F1E3A&color=fff', whatsapp: '2250104210117', orderIndex: 4 },
-  { id: '5', name: 'Kadiatou Diallo', role: 'Resp. Com & Médias', photoUrl: 'https://ui-avatars.com/api/?name=Kadiatou+Diallo&background=E74A67&color=fff', whatsapp: '2250779534720', orderIndex: 5 },
-  { id: '6', name: 'Bazzé Aurélia', role: 'Resp. Événementiel', photoUrl: 'https://ui-avatars.com/api/?name=Bazze+Aurelia&background=0F1E3A&color=fff', whatsapp: '2250566868795', orderIndex: 6 },
-  { id: '7', name: 'Nasser Darine', role: 'Resp. Affaires Sociales', photoUrl: 'https://ui-avatars.com/api/?name=Nasser+Darine&background=E74A67&color=fff', whatsapp: '2250574406161', orderIndex: 7 },
-  { id: '8', name: 'Koffi Jean Philippe', role: 'Resp. Logistique', photoUrl: 'https://ui-avatars.com/api/?name=Koffi+Jean&background=0F1E3A&color=fff', whatsapp: '2250708878659', orderIndex: 8 },
-  { id: '9', name: 'EL HAGE Mohamed', role: 'Représentant Prépa 1', photoUrl: 'https://ui-avatars.com/api/?name=El+Hage&background=E74A67&color=fff', whatsapp: '2250101013102', orderIndex: 9 },
-  { id: '10', name: 'Joas Phamuel', role: 'Représentant Prépa 1', photoUrl: 'https://ui-avatars.com/api/?name=Joas+Phamuel&background=0F1E3A&color=fff', whatsapp: '14388692832', orderIndex: 10 },
-  { id: '11', name: 'Kouassi Jemima', role: 'Resp. Clubs Étudiants', photoUrl: 'https://ui-avatars.com/api/?name=Kouassi+Jemima&background=E74A67&color=fff', whatsapp: '2250140152020', orderIndex: 11 },
-  { id: '12', name: 'Abraham Vandoli', role: 'Représentant B2', photoUrl: 'https://ui-avatars.com/api/?name=Abraham+Vandoli&background=0F1E3A&color=fff', whatsapp: '2250787381250', orderIndex: 12 },
-];
+const sanitizeData = (data: any) => {
+  const clean: any = {};
+  Object.keys(data).forEach(key => {
+    if (data[key] !== undefined) {
+      clean[key] = data[key];
+    }
+  });
+  return clean;
+};
 
-export const MOCK_CLUBS: Club[] = [
-  { 
-    id: '1', 
-    name: 'Club Sportif', 
-    description: 'Football, Basketball et remise en forme pour tous les étudiants.', 
-    leaderName: 'Kouassi Jemima', 
-    leaderWhatsapp: '2250140152020',
-    activities: ['Matchs inter-classes', 'Fitness hebdomadaire'],
-    emoji: '⚽'
-  },
-  { 
-    id: '2', 
-    name: 'Club d\'Anglais', 
-    description: 'Pratique de la langue anglaise, échanges culturels et débats.', 
-    leaderName: 'Responsable Club', 
-    leaderWhatsapp: '2250140152020',
-    activities: ['Tea Time', 'Movie Night', 'Debate Club'],
-    emoji: '🗣️' // Remplacement du drapeau
-  },
-  { 
-    id: '3', 
-    name: 'Club Art Oratoire & Débat', 
-    description: 'Apprendre à convaincre, à structurer ses idées et à parler en public.', 
-    leaderName: 'Responsable Club', 
-    leaderWhatsapp: '2250140152020',
-    activities: ['Concours d\'éloquence', 'Ateliers de prise de parole'],
-    emoji: '🎤'
-  },
-  { 
-    id: '4', 
-    name: 'Club Jeux Vidéos', 
-    description: 'Tournois E-sport, détente et culture gaming.', 
-    leaderName: 'Responsable Club', 
-    leaderWhatsapp: '2250140152020',
-    activities: ['Tournoi FIFA', 'Soirées Gaming'],
-    emoji: '🎮'
-  },
-  { 
-    id: CINEMA_CLUB_ID, 
-    name: 'Club Cinéma', 
-    description: 'Découverte et discussion autour du 7ème art. Projections et analyses de films.', 
-    leaderName: 'Responsable Club', 
-    leaderWhatsapp: '2250140152020',
-    activities: ['Projections hebdomadaires', 'Analyse filmique'],
-    emoji: '🎬'
-  },
-];
+const isAuth = () => !!auth?.currentUser;
+const isLocalAdmin = () => localStorage.getItem('isAuthenticated') === 'true' && !isAuth();
 
-export const MOCK_EVENTS: Event[] = [
-  { 
-    id: '1', 
-    title: 'Journée d\'Intégration', 
-    date: '2025-10-15', 
-    location: 'Campus IFRAN', 
-    description: 'Accueil des nouveaux étudiants avec jeux et barbecue.', 
-    imageUrl: 'https://picsum.photos/800/400?random=10', 
-    status: 'upcoming' 
-  },
-  { 
-    id: '2', 
-    title: 'Conférence Tech & IA', 
-    date: '2025-11-05', 
-    location: 'Amphithéâtre A', 
-    description: 'L\'IA en Afrique : Opportunités et défis.', 
-    imageUrl: 'https://picsum.photos/800/400?random=11', 
-    status: 'upcoming' 
-  },
-  { 
-    id: '3', 
-    title: 'Séance Cinéma', 
-    date: '2025-12-12', 
-    location: 'Salle Polyvalente', 
-    description: 'Projection spéciale du film de la semaine. Popcorn et boissons en vente !', 
-    imageUrl: 'https://image.tmdb.org/t/p/original/uS7M2xK2hM0bS0Isc2b5a5k9TfI.jpg', // Affiche de Dune 2
-    status: 'upcoming' 
-  },
-];
-
-export const MOCK_STUDENTS: Student[] = [
-  { id: '1', name: 'Koné Bakary', level: 'B2 Dev', hasPaid: true, paymentDate: '2025-09-01', amount: 4000, paymentType: 'Mensuel' },
-  { id: '2', name: 'Soro Minata', level: 'Prépa 1', hasPaid: false },
-  { id: '3', name: 'Kouamé Cyrille', level: 'Master 1', hasPaid: true, paymentDate: '2025-09-10', amount: 4000, paymentType: 'Mensuel' },
-  { id: '4', name: 'Zadi Prisca', level: 'B3 Com', hasPaid: true, paymentDate: '2025-09-05', amount: 10000, paymentType: 'Ponctuel' },
-];
-
-export const MOCK_MENTORS: Mentor[] = [
-  { id: '1', name: 'Méhdi Traoré', subject: 'Communication Digitale', whatsapp: '2250789609672' },
-  { id: '2', name: 'Koman Othniel', subject: 'Développement Web', whatsapp: '2250767842730' },
-];
-
-// --- HELPERS ---
+const STORAGE_KEY_SUFFIX = '_v11'; 
 
 const getFromStorage = <T,>(key: string, defaultData: T): T => {
   try {
-    const stored = localStorage.getItem(key + '_v4'); // v4 for new schema
+    const stored = localStorage.getItem(key + STORAGE_KEY_SUFFIX);
     if (stored) return JSON.parse(stored);
-    localStorage.setItem(key + '_v4', JSON.stringify(defaultData));
     return defaultData;
   } catch (e) {
     return defaultData;
@@ -126,220 +31,284 @@ const getFromStorage = <T,>(key: string, defaultData: T): T => {
 };
 
 const saveToStorage = (key: string, data: any) => {
-  localStorage.setItem(key + '_v4', JSON.stringify(data));
+  localStorage.setItem(key + STORAGE_KEY_SUFFIX, JSON.stringify(data));
 };
 
-// Generic CRUD helper
 const getAll = async <T>(collectionName: string, mockData: T[]): Promise<T[]> => {
+  if (isLocalAdmin()) return getFromStorage(collectionName, mockData);
+
   if (db) {
     try {
       const snapshot = await getDocs(collection(db, collectionName));
-      if (snapshot.empty) return [];
+      if (snapshot.empty) return getFromStorage(collectionName, mockData);
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
     } catch (error) {
-      console.warn(`Firestore: Error getting ${collectionName}, using local storage.`, error);
       return getFromStorage(collectionName, mockData);
     }
-  } else {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return getFromStorage(collectionName, mockData);
   }
+  return getFromStorage(collectionName, mockData);
 };
 
-const addOne = async <T>(collectionName: string, item: any, mockData: T[]): Promise<T[]> => {
-    if (db) {
-        await addDoc(collection(db, collectionName), item);
-        return dataService.fetchClubs() as any; // Re-fetch all to ensure order is correct
-    } else {
-        const current = getFromStorage(collectionName, mockData) as any[];
-        const newItem = { ...item, id: Date.now().toString() };
-        const updated = [...current, newItem];
-        saveToStorage(collectionName, updated);
-        return updated;
-    }
-}
-
-const updateOne = async <T>(collectionName: string, item: any, mockData: T[]): Promise<T[]> => {
-    if (db) {
-        const { id, ...data } = item;
-        const docRef = doc(db, collectionName, id);
-        await updateDoc(docRef, data);
-        return getAll(collectionName, mockData);
-    } else {
-        const current = getFromStorage(collectionName, mockData) as any[];
-        const updated = current.map(i => i.id === item.id ? item : i);
-        saveToStorage(collectionName, updated);
-        return updated;
-    }
-}
-
-const deleteOne = async <T>(collectionName: string, id: string, mockData: T[]): Promise<T[]> => {
-    if (db) {
-        await deleteDoc(doc(db, collectionName, id));
-        return getAll(collectionName, mockData);
-    } else {
-        const current = getFromStorage(collectionName, mockData) as any[];
-        const updated = current.filter(i => i.id !== id);
-        saveToStorage(collectionName, updated);
-        return updated;
-    }
-}
-
-// --- EXPORTED SERVICE ---
-
 export const dataService = {
-  // Image Upload with client-side compression
   uploadImage: (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const MAX_WIDTH = 800;
-      const MAX_HEIGHT = 800;
-      const QUALITY = 0.8;
-
+    return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
         img.src = event.target?.result as string;
         img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800;
           let width = img.width;
           let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = Math.round((height * MAX_WIDTH) / width);
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = Math.round((width * MAX_HEIGHT) / height);
-              height = MAX_HEIGHT;
-            }
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
+          if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
+          canvas.width = width; canvas.height = height;
           const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            return reject(new Error('Impossible d\'obtenir le contexte du canvas.'));
-          }
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const dataUrl = canvas.toDataURL('image/jpeg', QUALITY);
-          resolve(dataUrl);
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
         };
-        img.onerror = (error) => reject(new Error("Erreur de chargement de l'image."));
       };
-      reader.onerror = (error) => reject(new Error("Erreur de lecture du fichier."));
       reader.readAsDataURL(file);
     });
   },
 
-  // Members
   fetchMembers: async () => {
-    const data = await getAll<Member>('members', MOCK_MEMBERS);
+    const data = await getAll<Member>('members', []);
     return data.sort((a, b) => (a.orderIndex ?? 999) - (b.orderIndex ?? 999));
   },
   addMember: async (member: Omit<Member, 'id'>) => {
-    const allMembers = await dataService.fetchMembers();
-    const maxOrder = allMembers.reduce((max, m) => Math.max(max, m.orderIndex || 0), 0);
-    const newMemberWithOrder = { ...member, orderIndex: maxOrder + 1 };
-    return addOne('members', newMemberWithOrder, MOCK_MEMBERS);
+    const data = sanitizeData(member);
+    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'members'), data);
+    else { const curr = getFromStorage<Member[]>('members', []); saveToStorage('members', [...curr, { ...data, id: Date.now().toString() }]); }
+    return dataService.fetchMembers();
   },
-  updateMember: (member: Member) => updateOne('members', member, MOCK_MEMBERS),
-  deleteMember: (id: string) => deleteOne('members', id, MOCK_MEMBERS),
+  updateMember: async (m: Member) => {
+    const { id, ...data } = sanitizeData(m);
+    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'members', id), data);
+    else { const curr = getFromStorage<Member[]>('members', []); saveToStorage('members', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    return dataService.fetchMembers();
+  },
+  deleteMember: async (id: string) => {
+    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'members', id));
+    else { const curr = getFromStorage<Member[]>('members', []); saveToStorage('members', curr.filter(x => x.id !== id)); }
+    return dataService.fetchMembers();
+  },
   updateMembersOrder: async (members: Member[]) => {
-    const membersWithOrder = members.map((member, index) => ({...member, orderIndex: index}));
-    if (db) {
+    if (db && isAuth() && !isLocalAdmin()) { const b = writeBatch(db); members.forEach((m, i) => b.update(doc(db, 'members', m.id), { orderIndex: i })); await b.commit(); }
+    else saveToStorage('members', members.map((m, i) => ({ ...m, orderIndex: i })));
+  },
+
+  fetchClubs: () => getAll<Club>('clubs', []),
+  addClub: async (club: Omit<Club, 'id'>) => {
+    const data = sanitizeData(club);
+    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'clubs'), data);
+    else { const curr = getFromStorage<Club[]>('clubs', []); saveToStorage('clubs', [...curr, { ...data, id: Date.now().toString() }]); }
+    return dataService.fetchClubs();
+  },
+  updateClub: async (c: Club) => {
+    const { id, ...data } = sanitizeData(c);
+    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'clubs', id), data);
+    else { const curr = getFromStorage<Club[]>('clubs', []); saveToStorage('clubs', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    return dataService.fetchClubs();
+  },
+  deleteClub: async (id: string) => {
+    if (db && isAuth() && !isLocalAdmin()) {
+        await deleteDoc(doc(db, 'clubs', id));
+        const regs = await getDocs(query(collection(db, 'club_registrations'), where('clubId', '==', id)));
         const batch = writeBatch(db);
-        membersWithOrder.forEach((member) => {
-            const docRef = doc(db, 'members', member.id);
-            batch.update(docRef, { orderIndex: member.orderIndex });
+        regs.forEach(r => batch.delete(r.ref));
+        await batch.commit();
+    } else { 
+        const curr = getFromStorage<Club[]>('clubs', []); 
+        saveToStorage('clubs', curr.filter(x => x.id !== id));
+        const regs = getFromStorage<ClubRegistration[]>('club_registrations', []);
+        saveToStorage('club_registrations', regs.filter(r => r.clubId !== id));
+    }
+    return dataService.fetchClubs();
+  },
+
+  fetchAteliers: async () => {
+    const data = await getAll<Atelier>('ateliers', []);
+    return data.sort((a, b) => (a.orderIndex ?? 999) - (b.orderIndex ?? 999));
+  },
+  addAtelier: async (a: Omit<Atelier, 'id'>) => {
+    const data = sanitizeData(a);
+    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'ateliers'), data);
+    else { const curr = getFromStorage<Atelier[]>('ateliers', []); saveToStorage('ateliers', [...curr, { ...data, id: Date.now().toString() }]); }
+    return dataService.fetchAteliers();
+  },
+  updateAtelier: async (a: Atelier) => {
+    const { id, ...data } = sanitizeData(a);
+    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'ateliers', id), data);
+    else { const curr = getFromStorage<Atelier[]>('ateliers', []); saveToStorage('ateliers', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    return dataService.fetchAteliers();
+  },
+  deleteAtelier: async (id: string) => {
+    if (db && isAuth() && !isLocalAdmin()) {
+        await deleteDoc(doc(db, 'ateliers', id));
+        const regs = await getDocs(query(collection(db, 'club_registrations'), where('atelierId', '==', id)));
+        const batch = writeBatch(db);
+        regs.forEach(r => batch.delete(r.ref));
+        await batch.commit();
+    } else { 
+        const curr = getFromStorage<Atelier[]>('ateliers', []); 
+        saveToStorage('ateliers', curr.filter(x => x.id !== id));
+        const regs = getFromStorage<ClubRegistration[]>('club_registrations', []);
+        saveToStorage('club_registrations', regs.filter(r => r.atelierId !== id));
+    }
+    return dataService.fetchAteliers();
+  },
+  updateAteliersOrder: async (ateliers: Atelier[]) => {
+    if (db && isAuth() && !isLocalAdmin()) { const b = writeBatch(db); ateliers.forEach((a, i) => b.update(doc(db, 'ateliers', a.id), { orderIndex: i })); await b.commit(); }
+    else saveToStorage('ateliers', ateliers.map((a, i) => ({ ...a, orderIndex: i })));
+  },
+
+  registerToClub: async (registration: Omit<ClubRegistration, 'id'>) => {
+    const data = sanitizeData(registration);
+    if (db && !isLocalAdmin()) {
+        try { await addDoc(collection(db, 'club_registrations'), data); }
+        catch (e) { const curr = getFromStorage('club_registrations', []); saveToStorage('club_registrations', [...curr, { ...data, id: Date.now().toString() }]); }
+    } else { const curr = getFromStorage('club_registrations', []); saveToStorage('club_registrations', [...curr, { ...data, id: Date.now().toString() }]); }
+  },
+  updateClubRegistration: async (reg: ClubRegistration) => {
+    const { id, ...data } = sanitizeData(reg);
+    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'club_registrations', id), data);
+    else { const curr = getFromStorage<ClubRegistration[]>('club_registrations', []); saveToStorage('club_registrations', curr.map(x => x.id === id ? { ...data, id } : x)); }
+  },
+  fetchClubRegistrations: async (filterId?: string, isAtelier: boolean = false) => {
+    const all = await getAll<ClubRegistration>('club_registrations', []);
+    
+    if (!filterId) {
+        return all.filter(r => {
+            if (r.isAtelier) return !!r.atelierId;
+            return !!r.clubId;
         });
+    }
+
+    return all.filter(r => {
+        if (isAtelier) {
+            return r.isAtelier === true && r.atelierId === filterId;
+        } else {
+            return r.isAtelier !== true && r.clubId === filterId;
+        }
+    });
+  },
+  deleteClubRegistration: async (id: string) => {
+    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'club_registrations', id));
+    else { const curr = getFromStorage<ClubRegistration[]>('club_registrations', []); saveToStorage('club_registrations', curr.filter(x => x.id !== id)); }
+  },
+  resetAtelierRegistrations: async (atelierId: string) => {
+    if (db && isAuth() && !isLocalAdmin()) {
+        const q = query(collection(db, 'club_registrations'), where('atelierId', '==', atelierId), where('isAtelier', '==', true));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.forEach(d => batch.delete(d.ref));
         await batch.commit();
     } else {
-        saveToStorage('members', membersWithOrder);
+        const curr = getFromStorage<ClubRegistration[]>('club_registrations', []);
+        saveToStorage('club_registrations', curr.filter(r => !(r.atelierId === atelierId && r.isAtelier === true)));
     }
   },
-
-  // Clubs
-  fetchClubs: () => getAll<Club>('clubs', MOCK_CLUBS),
-  addClub: (club: Omit<Club, 'id'>) => addOne('clubs', club, MOCK_CLUBS),
-  updateClub: (club: Club) => updateOne('clubs', club, MOCK_CLUBS),
-  deleteClub: (id: string) => deleteOne('clubs', id, MOCK_CLUBS),
-
-  // Club Registrations
-  registerToClub: async (registration: Omit<ClubRegistration, 'id'>) => {
-    if (db) {
-       await addDoc(collection(db, 'club_registrations'), registration);
-    } else {
-       const current = getFromStorage('club_registrations', []) as any[];
-       const newItem = { ...registration, id: Date.now().toString() };
-       saveToStorage('club_registrations', [...current, newItem]);
-    }
-  },
-  
-  fetchClubRegistrations: async (clubId?: string) => {
-    if (db) {
-        const ref = collection(db, 'club_registrations');
-        const snapshot = await getDocs(ref);
-        const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClubRegistration));
-        if (clubId) return all.filter(r => r.clubId === clubId);
-        return all;
-    } else {
-        const all = getFromStorage<ClubRegistration[]>('club_registrations', []);
-        if (clubId) return all.filter(r => r.clubId === clubId);
-        return all;
-    }
-  },
-
-  deleteClubRegistration: (id: string) => deleteOne('club_registrations', id, []),
-
-  // Events
-  fetchEvents: () => getAll<Event>('events', MOCK_EVENTS),
-  addEvent: (event: Omit<Event, 'id'>) => addOne('events', event, MOCK_EVENTS),
-  updateEvent: (event: Event) => updateOne('events', event, MOCK_EVENTS),
-  deleteEvent: (id: string) => deleteOne('events', id, MOCK_EVENTS),
-  
-  // Students (Cotisations)
-  fetchStudents: () => getAll<Student>('students', MOCK_STUDENTS),
-  addStudent: (student: Omit<Student, 'id'>) => addOne('students', student, MOCK_STUDENTS),
-  updateStudent: (student: Student) => updateOne('students', student, MOCK_STUDENTS),
-  deleteStudent: (id: string) => deleteOne('students', id, MOCK_STUDENTS),
-
-  // Cinema Sales
-  fetchCinemaSales: () => getAll<CinemaSale>('cinema_sales', []),
-  addCinemaSale: (sale: Omit<CinemaSale, 'id'>) => addOne('cinema_sales', sale, []),
-  updateCinemaSale: (sale: CinemaSale) => updateOne('cinema_sales', sale, []),
-  deleteCinemaSale: (id: string) => deleteOne('cinema_sales', id, []),
-  
-  // Document History
-  fetchDocumentRecords: async () => {
-    if (db) {
-        const q = query(collection(db, 'documents'), orderBy('date', 'desc'));
+  wipeAllAteliersRegistrations: async () => {
+    if (db && isAuth() && !isLocalAdmin()) {
+        const q = query(collection(db, 'club_registrations'), where('isAtelier', '==', true));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DocumentRecord));
+        const batch = writeBatch(db);
+        snapshot.forEach(d => batch.delete(d.ref));
+        await batch.commit();
     } else {
-        return getFromStorage<DocumentRecord[]>('documents', []).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const curr = getFromStorage<ClubRegistration[]>('club_registrations', []);
+        saveToStorage('club_registrations', curr.filter(r => r.isAtelier !== true));
     }
   },
-  addDocumentRecord: (record: Omit<DocumentRecord, 'id'>) => addOne('documents', record, []),
 
-  // Mentors (Static)
-  getMentors: () => MOCK_MENTORS,
+  fetchEvents: () => getAll<Event>('events', []),
+  addEvent: async (e: Omit<Event, 'id'>) => {
+    const data = sanitizeData(e);
+    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'events'), data);
+    else { const curr = getFromStorage<Event[]>('events', []); saveToStorage('events', [...curr, { ...data, id: Date.now().toString() }]); }
+    return dataService.fetchEvents();
+  },
+  updateEvent: async (e: Event) => {
+    const { id, ...data } = sanitizeData(e);
+    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'events', id), data);
+    else { const curr = getFromStorage<Event[]>('events', []); saveToStorage('events', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    return dataService.fetchEvents();
+  },
+  deleteEvent: async (id: string) => {
+    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'events', id));
+    else { const curr = getFromStorage<Event[]>('events', []); saveToStorage('events', curr.filter(x => x.id !== id)); }
+    return dataService.fetchEvents();
+  },
 
-  // Stats
-  getStats: async () => {
-    const students = await getAll('students', MOCK_STUDENTS);
-    const clubs = await getAll('clubs', MOCK_CLUBS);
-    const events = await getAll('events', MOCK_EVENTS);
-    const paidCount = students.filter((s: any) => s.hasPaid).length;
-    const totalCollected = students.filter((s: any) => s.hasPaid).reduce((acc, s: any) => acc + (s.amount || 0), 0);
-    
-    return {
-      totalStudents: students.length,
-      totalCollected: totalCollected,
-      activeClubs: clubs.length,
-      eventsCount: events.length
-    };
+  fetchMentors: async () => {
+    const data = await getAll<Mentor>('mentors', []);
+    return data.sort((a, b) => (a.orderIndex ?? 999) - (b.orderIndex ?? 999));
+  },
+  addMentor: async (m: Omit<Mentor, 'id'>) => {
+    const data = sanitizeData(m);
+    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'mentors'), data);
+    else { const curr = getFromStorage<Mentor[]>('mentors', []); saveToStorage('mentors', [...curr, { ...data, id: Date.now().toString() }]); }
+    return dataService.fetchMentors();
+  },
+  updateMentor: async (m: Mentor) => {
+    const { id, ...data } = sanitizeData(m);
+    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'mentors', id), data);
+    else { const curr = getFromStorage<Mentor[]>('mentors', []); saveToStorage('mentors', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    return dataService.fetchMentors();
+  },
+  deleteMentor: async (id: string) => {
+    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'mentors', id));
+    else { const curr = getFromStorage<Mentor[]>('mentors', []); saveToStorage('mentors', curr.filter(x => x.id !== id)); }
+    return dataService.fetchMentors();
+  },
+  updateMentorsOrder: async (mentors: Mentor[]) => {
+    if (db && isAuth() && !isLocalAdmin()) { const b = writeBatch(db); mentors.forEach((m, i) => b.update(doc(db, 'mentors', m.id), { orderIndex: i })); await b.commit(); }
+    else saveToStorage('mentors', mentors.map((m, i) => ({ ...m, orderIndex: i })));
+  },
+
+  fetchDocumentRecords: () => getAll<DocumentRecord>('documents', []),
+  addDocumentRecord: async (r: Omit<DocumentRecord, 'id'>) => {
+    const data = sanitizeData(r);
+    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'documents'), data);
+    else { const curr = getFromStorage<DocumentRecord[]>('documents', []); saveToStorage('documents', [...curr, { ...data, id: Date.now().toString() }]); }
+  },
+
+  fetchStudents: () => getAll<Student>('students', []),
+  addStudent: async (s: Omit<Student, 'id'>) => {
+    const data = sanitizeData(s);
+    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'students'), data);
+    else { const curr = getFromStorage<Student[]>('students', []); saveToStorage('students', [...curr, { ...data, id: Date.now().toString() }]); }
+    return dataService.fetchStudents();
+  },
+  updateStudent: async (s: Student) => {
+    const { id, ...data } = sanitizeData(s);
+    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'students', id), data);
+    else { const curr = getFromStorage<Student[]>('students', []); saveToStorage('students', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    return dataService.fetchStudents();
+  },
+  deleteStudent: async (id: string) => {
+    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'students', id));
+    else { const curr = getFromStorage<Student[]>('students', []); saveToStorage('students', curr.filter(x => x.id !== id)); }
+    return dataService.fetchStudents();
+  },
+
+  fetchCinemaSales: () => getAll<CinemaSale>('cinema_sales', []),
+  addCinemaSale: async (s: Omit<CinemaSale, 'id'>) => {
+    const data = sanitizeData(s);
+    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'cinema_sales'), data);
+    else { const curr = getFromStorage<CinemaSale[]>('cinema_sales', []); saveToStorage('cinema_sales', [...curr, { ...data, id: Date.now().toString() }]); }
+    return dataService.fetchCinemaSales();
+  },
+  updateCinemaSale: async (s: CinemaSale) => {
+    const { id, ...data } = sanitizeData(s);
+    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'cinema_sales', id), data);
+    else { const curr = getFromStorage<CinemaSale[]>('cinema_sales', []); saveToStorage('cinema_sales', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    return dataService.fetchCinemaSales();
+  },
+  deleteCinemaSale: async (id: string) => {
+    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'cinema_sales', id));
+    else { const curr = getFromStorage<CinemaSale[]>('cinema_sales', []); saveToStorage('cinema_sales', curr.filter(x => x.id !== id)); }
+    return dataService.fetchCinemaSales();
   }
 };

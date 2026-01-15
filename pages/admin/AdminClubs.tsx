@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
@@ -34,7 +33,7 @@ const AdminClubs = () => {
 
   const inputStyle = "w-full bg-bde-navy text-white border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition placeholder-gray-400";
   const textAreaStyle = "w-full bg-bde-navy text-white border border-gray-600 p-3 rounded-lg focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none transition h-24 resize-none placeholder-gray-400";
-  const levels = ["Prépa 1", "Prépa 2", "B2 COM", "B2 CREA", "B2 DEV", "B3 COM", "B3 CREA", "B3 DEV"];
+  const levels = ["Prépa 1", "Prépa 2", "B2 COM", "B2 CREA", "B2 DEV", "B3 COM", "B3 CREA", "B3 DEV", "Master 1", "Master 2"];
 
 
   const loadData = async () => {
@@ -77,18 +76,21 @@ const AdminClubs = () => {
     e.preventDefault();
     const actList = activities.split(',').map(s => s.trim()).filter(s => s !== '');
     
+    const clubData = {
+        name, 
+        description: desc, 
+        leaderName: leader, 
+        leaderWhatsapp: contact, 
+        activities: actList, 
+        emoji
+    };
+
     if (editingClub) {
-        const updated = {
-            ...editingClub,
-            name, description: desc, leaderName: leader, leaderWhatsapp: contact, activities: actList, emoji
-        };
+        const updated = { ...editingClub, ...clubData };
         const newList = await dataService.updateClub(updated);
         setClubs(newList);
     } else {
-        const newClub = {
-            name, description: desc, leaderName: leader, leaderWhatsapp: contact, activities: actList, emoji
-        };
-        const newList = await dataService.addClub(newClub);
+        const newList = await dataService.addClub(clubData);
         setClubs(newList);
     }
     setIsModalOpen(false);
@@ -96,7 +98,7 @@ const AdminClubs = () => {
 
   const handleViewRegistrations = async (clubId: string) => {
     setViewingRegistrations(clubId);
-    const regs = await dataService.fetchClubRegistrations(clubId);
+    const regs = await dataService.fetchClubRegistrations(clubId, false);
     setRegistrations(regs);
   };
 
@@ -108,9 +110,9 @@ const AdminClubs = () => {
         clubId: viewingRegistrations,
         studentName: newMemberName,
         studentLevel: newMemberLevel,
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        isAtelier: false
     });
-    // Refresh list and clear form
     handleViewRegistrations(viewingRegistrations);
     setNewMemberName('');
     setShowAddMemberForm(false);
@@ -126,8 +128,11 @@ const AdminClubs = () => {
   return (
     <AdminLayout>
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-800">Gestion des Clubs</h2>
-        <button onClick={() => openModal()} className="flex items-center gap-2 bg-bde-rose text-white px-4 py-2 rounded-lg hover:bg-rose-600 transition shadow-lg shadow-rose-200">
+        <div>
+            <h2 className="text-2xl font-bold text-gray-800">Gestion des Clubs Permanents</h2>
+            <p className="text-sm text-gray-500">Gérez les clubs actifs tout au long de l'année scolaire.</p>
+        </div>
+        <button onClick={() => openModal()} className="flex items-center gap-2 bg-bde-rose text-white px-4 py-2 rounded-lg hover:bg-rose-600 transition shadow-lg">
           <Plus size={18} /> Nouveau Club
         </button>
       </div>
@@ -144,7 +149,7 @@ const AdminClubs = () => {
                 <button 
                     onClick={() => handleViewRegistrations(club.id)} 
                     className="p-2 text-bde-navy hover:bg-gray-100 rounded-full transition"
-                    title="Voir les inscrits"
+                    title="Voir les membres"
                 >
                     <Eye size={18}/>
                 </button>
@@ -198,53 +203,39 @@ const AdminClubs = () => {
 
       {/* Modal CRUD */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all scale-100">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl my-8 overflow-hidden transform transition-all">
             <div className="flex justify-between items-center px-8 py-6 border-b border-gray-100 bg-gray-50/50">
-              <h3 className="font-bold text-xl text-bde-navy">{editingClub ? 'Modifier le Club' : 'Créer un Club'}</h3>
+              <h3 className="font-bold text-xl text-bde-navy">{editingClub ? 'Modifier' : 'Créer'} Club</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition"><X size={24}/></button>
             </div>
             
-            <form onSubmit={handleSave} className="p-8 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nom du Club</label>
-                  <input 
-                    type="text" 
-                    className={inputStyle}
-                    value={name} 
-                    onChange={e => setName(e.target.value)} 
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Emoji</label>
-                  <input 
-                    type="text" 
-                    className={inputStyle}
-                    value={emoji} 
-                    onChange={e => setEmoji(e.target.value)} 
-                    placeholder="⚽"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Description</label>
-                <textarea className={textAreaStyle} value={desc} onChange={e => setDesc(e.target.value)} required></textarea>
-              </div>
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Responsable</label>
-                   <input type="text" className={inputStyle} value={leader} onChange={e => setLeader(e.target.value)} required />
-                </div>
-                <div>
-                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">WhatsApp</label>
-                   <input type="text" className={inputStyle} value={contact} onChange={e => setContact(e.target.value)} required />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Activités (séparées par des virgules)</label>
-                <input type="text" className={inputStyle} value={activities} onChange={e => setActivities(e.target.value)} />
+            <form onSubmit={handleSave} className="p-8 space-y-6">
+              <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nom du Club</label>
+                      <input type="text" className={inputStyle} value={name} onChange={e => setName(e.target.value)} required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Emoji</label>
+                      <input type="text" className={inputStyle} value={emoji} onChange={e => setEmoji(e.target.value)} placeholder="⚽" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Description</label>
+                    <textarea className={textAreaStyle} value={desc} onChange={e => setDesc(e.target.value)} required></textarea>
+                  </div>
+                  <div className="grid grid-cols-2 gap-5">
+                    <div>
+                       <label className="block text-sm font-semibold text-gray-700 mb-1.5">Responsable</label>
+                       <input type="text" className={inputStyle} value={leader} onChange={e => setLeader(e.target.value)} required />
+                    </div>
+                    <div>
+                       <label className="block text-sm font-semibold text-gray-700 mb-1.5">WhatsApp</label>
+                       <input type="text" className={inputStyle} value={contact} onChange={e => setContact(e.target.value)} required />
+                    </div>
+                  </div>
               </div>
 
               <div className="pt-4 flex justify-end gap-3">
@@ -264,7 +255,7 @@ const AdminClubs = () => {
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
                   <div className="flex justify-between items-center p-6 border-b bg-gray-50">
                     <h3 className="font-bold text-xl text-bde-navy flex items-center gap-2">
-                        <Users /> Inscriptions : {clubs.find(c => c.id === viewingRegistrations)?.name}
+                        <Users /> Membres inscrits : {clubs.find(c => c.id === viewingRegistrations)?.name}
                     </h3>
                     <button onClick={() => setViewingRegistrations(null)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
                   </div>
@@ -276,7 +267,6 @@ const AdminClubs = () => {
                                     <tr>
                                         <th className="p-3 whitespace-nowrap">Étudiant</th>
                                         <th className="p-3 whitespace-nowrap">Niveau</th>
-                                        <th className="p-3 whitespace-nowrap">Date d'inscription</th>
                                         <th className="p-3 text-right whitespace-nowrap">Action</th>
                                     </tr>
                                 </thead>
@@ -288,9 +278,6 @@ const AdminClubs = () => {
                                                 <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold">
                                                     {reg.studentLevel}
                                                 </span>
-                                            </td>
-                                            <td className="p-3 text-sm text-gray-500 whitespace-nowrap">
-                                                {new Date(reg.date).toLocaleDateString('fr-FR')}
                                             </td>
                                             <td className="p-3 text-right whitespace-nowrap">
                                                 {regDeleteConfirmId === reg.id ? (
@@ -305,7 +292,7 @@ const AdminClubs = () => {
                             </table>
                         </div>
                      ) : (
-                         <div className="text-center py-10 text-gray-500">Aucune inscription pour le moment.</div>
+                         <div className="text-center py-10 text-gray-500">Aucun membre pour le moment.</div>
                      )}
                   </div>
                   <div className="p-6 border-t bg-gray-50">
