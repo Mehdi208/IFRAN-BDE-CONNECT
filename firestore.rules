@@ -93,6 +93,16 @@ service cloud.firestore {
       allow update, delete: if isAdmin() || true; // Autorisé temporairement
     }
 
+    // 15. Prospect Contacts (Prospection)
+    match /prospect_contacts/{contactId} {
+      allow read, write: if isAdmin() || true; // Autorisé temporairement
+    }
+
+    // 16. Campaign Templates
+    match /campaign_templates/{templateId} {
+      allow read, write: if isAdmin() || true; // Autorisé temporairement
+    }
+
     // --- RÈGLE GLOBALE DE SÉCURITÉ ---
     match /{document=**} {
       allow read, write: if false;

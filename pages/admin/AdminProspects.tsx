@@ -65,6 +65,17 @@ const AdminProspects = () => {
   // Campaign auto-runner states
   const [campaignMode, setCampaignMode] = useState(false);
   const [currentCampaignIndex, setCurrentCampaignIndex] = useState(0);
+  const [autoNextMode, setAutoNextMode] = useState(true);
+
+  // Campaign auto-advance handler
+  const handleCampaignSend = async (contact: ProspectContact) => {
+    sendWhatsAppMessage(contact);
+    if (autoNextMode) {
+      setTimeout(() => {
+        nextCampaignContact('sent');
+      }, 400);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -100,10 +111,24 @@ const AdminProspects = () => {
   // Replace template tags with contact details
   const personalizeMessage = (template: string, contact: ProspectContact | Partial<ProspectContact>): string => {
     if (!template) return '';
-    return template
+    let msg = template
       .replace(/{prenom}/gi, contact.firstName || '')
       .replace(/{nom}/gi, contact.lastName || '')
       .replace(/{telephone}/gi, contact.phone || '');
+
+    if (contact.customFields) {
+      Object.entries(contact.customFields).forEach(([key, val]) => {
+        // Replace exact matches of the column header (e.g., {Filière} or {Relation})
+        const regexExact = new RegExp(`{${key}}`, 'gi');
+        msg = msg.replace(regexExact, val || '');
+
+        // Replace simplified/normalized lowercase keys without accents or special characters
+        const normKey = key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+        const regexNorm = new RegExp(`{${normKey}}`, 'gi');
+        msg = msg.replace(regexNorm, val || '');
+      });
+    }
+    return msg;
   };
 
   const handleSaveTemplate = async () => {
@@ -154,18 +179,29 @@ const AdminProspects = () => {
     const parsed: Omit<ProspectContact, 'id'>[] = [];
     
     // Analyze headers
-    const firstLineCols = firstLine.split(separator).map(c => c.trim().toLowerCase());
+    const firstLineCols = firstLine.split(separator).map(c => c.trim());
+    const firstLineColsLower = firstLineCols.map(c => c.toLowerCase());
     
     const firstNameHeaders = ['prénom', 'prenom', 'first name', 'firstname', 'nom1', 'first'];
     const lastNameHeaders = ['nom', 'last name', 'lastname', 'family name', 'surname', 'last'];
-    const phoneHeaders = ['téléphone', 'telephone', 'tél', 'tel', 'phone', 'phone number', 'numéro', 'numero', 'whatsapp'];
+    const phoneHeaders = ['téléphone', 'telephone', 'tél', 'tel', 'phone', 'phone number', 'numéro', 'numero', 'whatsapp', 'tel', 'num', 'contact', 'cell'];
 
-    let firstNameIdx = firstLineCols.findIndex(col => firstNameHeaders.some(h => col.includes(h)));
-    let lastNameIdx = firstLineCols.findIndex(col => lastNameHeaders.some(h => col.includes(h) && !firstNameHeaders.some(f => col.includes(f))));
-    let phoneIdx = firstLineCols.findIndex(col => phoneHeaders.some(h => col.includes(h)));
+    let firstNameIdx = firstLineColsLower.findIndex(col => firstNameHeaders.some(h => col.includes(h)));
+    let lastNameIdx = firstLineColsLower.findIndex(col => lastNameHeaders.some(h => col.includes(h) && !firstNameHeaders.some(f => col.includes(f))));
+    let phoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)));
 
     const hasHeaders = firstNameIdx !== -1 || lastNameIdx !== -1 || phoneIdx !== -1;
     const startIdx = hasHeaders ? 1 : 0;
+
+    // Collect custom columns indices
+    const customCols: { name: string; idx: number }[] = [];
+    if (hasHeaders) {
+      firstLineCols.forEach((colName, idx) => {
+        if (idx !== firstNameIdx && idx !== lastNameIdx && idx !== phoneIdx) {
+          customCols.push({ name: colName, idx });
+        }
+      });
+    }
 
     for (let i = startIdx; i < lines.length; i++) {
       const cols = lines[i].split(separator).map(c => c.trim());
@@ -174,17 +210,27 @@ const AdminProspects = () => {
       let firstName = '';
       let lastName = '';
       let phone = '';
+      const customFields: Record<string, string> = {};
 
       if (hasHeaders) {
-        if (firstNameIdx !== -1) firstName = cols[firstNameIdx] || '';
-        if (lastNameIdx !== -1) lastName = cols[lastNameIdx] || '';
-        if (phoneIdx !== -1) phone = cols[phoneIdx] || '';
+        if (firstNameIdx !== -1 && cols[firstNameIdx] !== undefined) firstName = cols[firstNameIdx];
+        if (lastNameIdx !== -1 && cols[lastNameIdx] !== undefined) lastName = cols[lastNameIdx];
+        if (phoneIdx !== -1 && cols[phoneIdx] !== undefined) phone = cols[phoneIdx];
+
+        customCols.forEach(cc => {
+          if (cols[cc.idx] !== undefined) {
+            customFields[cc.name] = cols[cc.idx];
+          }
+        });
       } else {
-        // Fallback column guessing
+        // Fallback column guessing if NO headers were found
         if (cols.length >= 3) {
           firstName = cols[0];
           lastName = cols[1];
           phone = cols[2];
+          for (let cIdx = 3; cIdx < cols.length; cIdx++) {
+            customFields[`Colonne ${cIdx + 1}`] = cols[cIdx];
+          }
         } else if (cols.length === 2) {
           const nameParts = cols[0].split(/\s+/);
           firstName = nameParts[0] || '';
@@ -205,7 +251,8 @@ const AdminProspects = () => {
           lastName: lastName || '',
           phone: cleanPhone || '',
           status: 'to_do',
-          notes: ''
+          notes: '',
+          customFields: Object.keys(customFields).length > 0 ? customFields : undefined
         });
       }
     }
@@ -700,11 +747,11 @@ const AdminProspects = () => {
 
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => sendWhatsAppMessage(currentCampaignContact)}
+                  onClick={() => handleCampaignSend(currentCampaignContact)}
                   className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition-colors"
                 >
                   <Send size={18} />
-                  Ouvrir WhatsApp et Pré-remplir
+                  {autoNextMode ? "Ouvrir & Auto-Suivant 🚀" : "Ouvrir WhatsApp"}
                 </button>
                 <button
                   onClick={() => nextCampaignContact('sent')}
@@ -734,6 +781,21 @@ const AdminProspects = () => {
               <p className="text-sm text-gray-100 whitespace-pre-line italic">
                 {personalizeMessage(templateBody, currentCampaignContact)}
               </p>
+            </div>
+
+            {/* Auto Next Mode Selector */}
+            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between gap-4 relative z-10 text-xs">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none text-gray-300 hover:text-white transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={autoNextMode}
+                  onChange={(e) => setAutoNextMode(e.target.checked)}
+                  className="rounded border-gray-400 text-bde-rose focus:ring-bde-rose h-4 w-4 bg-white/10 border-white/20"
+                />
+                <span className="font-semibold flex items-center gap-1.5">
+                  🚀 Activer le Mode Rafale (l'ouverture de WhatsApp valide et passe au contact suivant automatiquement en 1 clic)
+                </span>
+              </label>
             </div>
           </div>
         )}
@@ -864,6 +926,24 @@ const AdminProspects = () => {
                 </div>
               )}
             </div>
+
+            {/* Custom fields for active contact */}
+            {activeContact && activeContact.customFields && Object.keys(activeContact.customFields).length > 0 && (
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Sparkles className="text-indigo-500" size={15} />
+                  Informations du contact
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(activeContact.customFields).map(([key, val]) => (
+                    <div key={key} className="bg-gray-50/70 p-2.5 rounded-lg border border-gray-100/50">
+                      <span className="text-[9px] text-gray-400 font-bold uppercase block truncate" title={key}>{key}</span>
+                      <span className="text-xs font-semibold text-gray-700 block whitespace-pre-wrap break-all mt-0.5" title={val}>{val || '-'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
           </div>
 
@@ -1072,6 +1152,15 @@ const AdminProspects = () => {
                               {reg.notes && (
                                 <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{reg.notes}</p>
                               )}
+                              {reg.customFields && Object.keys(reg.customFields).length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {Object.entries(reg.customFields).slice(0, 3).map(([key, val]) => (
+                                    <span key={key} className="inline-block text-[9px] bg-indigo-50/80 text-indigo-700 px-1.5 py-0.5 rounded font-medium max-w-[120px] truncate border border-indigo-100" title={`${key}: ${val}`}>
+                                      {val}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </td>
 
@@ -1268,6 +1357,29 @@ const AdminProspects = () => {
                   placeholder="Notes sur le prospect (filière d'intérêt, etc.)"
                 />
               </div>
+
+              {/* Edit existing custom fields */}
+              {formProspect.customFields && Object.keys(formProspect.customFields).length > 0 && (
+                <div className="border-t border-gray-100 pt-3 space-y-2">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Champs Personnalisés</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(formProspect.customFields).map(([key, val]) => (
+                      <div key={key} className="flex flex-col">
+                        <label className="block text-[9px] text-gray-500 font-semibold mb-0.5 truncate" title={key}>{key}</label>
+                        <input 
+                          type="text"
+                          value={val || ''}
+                          onChange={e => {
+                            const updatedFields = { ...formProspect.customFields, [key]: e.target.value };
+                            setFormProspect({ ...formProspect, customFields: updatedFields });
+                          }}
+                          className="w-full p-2 border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-bde-rose bg-gray-50 focus:bg-white transition-all"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4 border-t border-gray-100 mt-6">
                 <button 

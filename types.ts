@@ -160,6 +160,7 @@ export interface ProspectContact {
   status: 'to_do' | 'in_progress' | 'sent' | 'ignored';
   notes?: string;
   lastContactedAt?: string;
+  customFields?: Record<string, string>; // Extra columns from CSV/Sheets
 }
 
 export interface CampaignTemplate {

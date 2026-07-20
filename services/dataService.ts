@@ -430,18 +430,26 @@ export const dataService = {
   addProspect: async (p: Omit<ProspectContact, 'id'>) => {
     const data = sanitizeData(p);
     if (db) {
-      const res = await addDoc(collection(db, 'prospect_contacts'), data);
-      return dataService.fetchProspects();
+      try {
+        await addDoc(collection(db, 'prospect_contacts'), data);
+        return dataService.fetchProspects();
+      } catch (e) {
+        console.warn("Firestore error adding prospect, falling back to local:", e);
+      }
     }
     const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
-    saveToStorage('prospect_contacts', [...curr, { ...data, id: Date.now().toString() }]);
+    saveToStorage('prospect_contacts', [...curr, { ...data, id: 'local_' + Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5) }]);
     return dataService.fetchProspects();
   },
   updateProspect: async (p: ProspectContact) => {
     const { id, ...data } = sanitizeData(p);
     if (db) {
-      await updateDoc(doc(db, 'prospect_contacts', id), data);
-      return dataService.fetchProspects();
+      try {
+        await updateDoc(doc(db, 'prospect_contacts', id), data);
+        return dataService.fetchProspects();
+      } catch (e) {
+        console.warn("Firestore error updating prospect, falling back to local:", e);
+      }
     }
     const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
     saveToStorage('prospect_contacts', curr.map(x => x.id === id ? { ...data, id } : x));
@@ -449,11 +457,15 @@ export const dataService = {
   },
   deleteProspect: async (id: string) => {
     if (db) {
-      await deleteDoc(doc(db, 'prospect_contacts', id));
-    } else {
-      const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
-      saveToStorage('prospect_contacts', curr.filter(x => x.id !== id));
+      try {
+        await deleteDoc(doc(db, 'prospect_contacts', id));
+        return dataService.fetchProspects();
+      } catch (e) {
+        console.warn("Firestore error deleting prospect, falling back to local:", e);
+      }
     }
+    const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
+    saveToStorage('prospect_contacts', curr.filter(x => x.id !== id));
     return dataService.fetchProspects();
   },
   saveProspectsBulk: async (contacts: ProspectContact[]) => {
