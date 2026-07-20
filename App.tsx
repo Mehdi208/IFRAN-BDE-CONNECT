@@ -6,6 +6,8 @@ import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-d
 import Home from './pages/Home';
 import CalendarPage from './pages/Calendar';
 import Clubs from './pages/Clubs';
+import Gallery from './pages/Gallery';
+import Canteen from './pages/Canteen';
 import Tutoring from './pages/Tutoring';
 import Team from './pages/Team';
 import Login from './pages/Login';
@@ -14,11 +16,13 @@ import Login from './pages/Login';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminContributions from './pages/admin/AdminContributions';
 import AdminClubs from './pages/admin/AdminClubs';
+import AdminGallery from './pages/admin/AdminGallery';
 import AdminAteliers from './pages/admin/AdminAteliers';
+import AdminCanteen from './pages/admin/AdminCanteen';
 import AdminDocuments from './pages/admin/AdminDocuments';
 import AdminEvents from './pages/admin/AdminEvents';
 import AdminMembers from './pages/admin/AdminMembers';
-import AdminMentors from './pages/admin/AdminMentors';
+import AdminProspects from './pages/admin/AdminProspects';
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -39,6 +43,8 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/clubs" element={<Clubs />} />
+        <Route path="/gallery" element={<Gallery />} />
+        <Route path="/canteen" element={<Canteen />} />
         <Route path="/tutoring" element={<Tutoring />} />
         <Route path="/team" element={<Team />} />
         <Route path="/login" element={<Login />} />
@@ -46,11 +52,13 @@ function App() {
         <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/contributions" element={<ProtectedRoute><AdminContributions /></ProtectedRoute>} />
         <Route path="/admin/clubs" element={<ProtectedRoute><AdminClubs /></ProtectedRoute>} />
+        <Route path="/admin/gallery" element={<ProtectedRoute><AdminGallery /></ProtectedRoute>} />
         <Route path="/admin/ateliers" element={<ProtectedRoute><AdminAteliers /></ProtectedRoute>} />
+        <Route path="/admin/canteen" element={<ProtectedRoute><AdminCanteen /></ProtectedRoute>} />
         <Route path="/admin/documents" element={<ProtectedRoute><AdminDocuments /></ProtectedRoute>} />
         <Route path="/admin/events" element={<ProtectedRoute><AdminEvents /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
-        <Route path="/admin/mentors" element={<ProtectedRoute><AdminMentors /></ProtectedRoute>} />
+        <Route path="/admin/prospects" element={<ProtectedRoute><AdminProspects /></ProtectedRoute>} />
         <Route path="/admin/*" element={<Navigate to="/admin/dashboard" />} />
       </Routes>
     </HashRouter>

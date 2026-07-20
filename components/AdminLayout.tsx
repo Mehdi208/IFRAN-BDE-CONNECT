@@ -12,7 +12,10 @@ import {
   Menu,
   X,
   GraduationCap,
-  Sparkles
+  Sparkles,
+  UtensilsCrossed,
+  Image as ImageIcon,
+  Send
 } from 'lucide-react';
 import { auth } from '../firebaseConfig';
 import { signOut } from 'firebase/auth';
@@ -36,10 +39,12 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navItems = [
     { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
     { path: '/admin/contributions', icon: Wallet, label: 'Cotisations' },
+    { path: '/admin/prospects', icon: Send, label: 'Relances WhatsApp' },
+    { path: '/admin/canteen', icon: UtensilsCrossed, label: 'Gestion Cantine' },
     { path: '/admin/clubs', icon: Users, label: 'Clubs Permanents' },
     { path: '/admin/ateliers', icon: Sparkles, label: 'Ateliers Afternoon' },
     { path: '/admin/events', icon: Calendar, label: 'Événements' },
-    { path: '/admin/mentors', icon: GraduationCap, label: 'Tutorats' },
+    { path: '/admin/gallery', icon: ImageIcon, label: 'Galerie' },
     { path: '/admin/members', icon: UserCheck, label: 'Membres BDE' },
     { path: '/admin/documents', icon: FileText, label: 'Documents' },
   ];

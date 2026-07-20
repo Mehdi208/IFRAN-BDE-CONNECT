@@ -113,7 +113,7 @@ const Clubs = () => {
   };
 
   const inputStyle = "w-full border-2 border-gray-100 bg-gray-50 rounded-2xl p-4 focus:ring-2 focus:ring-bde-rose focus:border-bde-rose outline-none font-bold text-bde-navy transition-all";
-  const levels = ["Prépa 1", "Prépa 2", "B2 COM", "B2 CREA", "B2 DEV", "B3 COM", "B3 CREA", "B3 DEV", "Master 1", "Master 2"];
+  const levels = ["B1 COM", "B1 CREA", "B1 DEV", "B2 COM", "B2 CREA", "B2 DEV", "B3 COM", "B3 CREA", "B3 DEV", "Master 1", "Master 2"];
 
   const filteredAteliersForList = useMemo(() => {
       if (!activeAtelierFilter) return ateliers;

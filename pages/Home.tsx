@@ -43,17 +43,17 @@ const Home = () => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col items-center text-center">
           
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight mb-6 animate-fade-in-up opacity-0" style={{ animationDelay: '0s' }}>
-            <div className="animate-float">
+            <span className="block animate-float">
               Bienvenue sur <span className="text-transparent bg-clip-text bg-gradient-to-r from-bde-rose to-pink-400 inline-block">BDE Connect</span>
-            </div>
+            </span>
           </h1>
           
-          <p className="text-xl md:text-2xl text-blue-100 mb-10 font-light max-w-2xl mx-auto animate-fade-in-up opacity-0 leading-relaxed" style={{ animationDelay: '0.3s' }}>
+          <div className="text-xl md:text-2xl text-blue-100 mb-10 font-light max-w-2xl mx-auto animate-fade-in-up opacity-0 leading-relaxed" style={{ animationDelay: '0.3s' }}>
             <div className="animate-float-delayed">
               La plateforme officielle du Bureau des Étudiants de l'IFRAN Côte d'Ivoire. 
               <span className="block mt-2 text-white font-medium">Ensemble, construisons l'avenir.</span>
             </div>
-          </p>
+          </div>
           
           {/* Correction : Séparation des animations pour éviter le conflit d'opacité */}
           <div className="w-full animate-fade-in-up opacity-0" style={{ animationDelay: '0.6s' }}>

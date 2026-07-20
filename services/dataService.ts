@@ -1,7 +1,7 @@
 
 import { db, auth } from '../firebaseConfig';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, writeBatch, getDoc } from 'firebase/firestore';
-import { Club, Atelier, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord } from '../types';
+import { Club, Atelier, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord, Product, FoodOrder, GalleryItem, AssinieRegistration, NazaRegistration, ProspectContact, CampaignTemplate } from '../types';
 
 export const CINEMA_CLUB_ID = 'atelier-cinema-default';
 
@@ -15,35 +15,28 @@ const sanitizeData = (data: any) => {
   return clean;
 };
 
-const isAuth = () => !!auth?.currentUser;
-const isLocalAdmin = () => localStorage.getItem('isAuthenticated') === 'true' && !isAuth();
-
-const STORAGE_KEY_SUFFIX = '_v11'; 
-
+// On garde ces fonctions pour le fallback uniquement si Firebase est HS
+const STORAGE_KEY_SUFFIX = '_v12'; 
 const getFromStorage = <T,>(key: string, defaultData: T): T => {
   try {
     const stored = localStorage.getItem(key + STORAGE_KEY_SUFFIX);
     if (stored) return JSON.parse(stored);
     return defaultData;
-  } catch (e) {
-    return defaultData;
-  }
+  } catch (e) { return defaultData; }
 };
-
 const saveToStorage = (key: string, data: any) => {
   localStorage.setItem(key + STORAGE_KEY_SUFFIX, JSON.stringify(data));
 };
 
 const getAll = async <T>(collectionName: string, mockData: T[]): Promise<T[]> => {
-  if (isLocalAdmin()) return getFromStorage(collectionName, mockData);
-
   if (db) {
     try {
       const snapshot = await getDocs(collection(db, collectionName));
-      if (snapshot.empty) return getFromStorage(collectionName, mockData);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+      if (!snapshot.empty) {
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+      }
     } catch (error) {
-      return getFromStorage(collectionName, mockData);
+      console.warn(`Firestore read error on ${collectionName}, falling back to local:`, error);
     }
   }
   return getFromStorage(collectionName, mockData);
@@ -51,11 +44,10 @@ const getAll = async <T>(collectionName: string, mockData: T[]): Promise<T[]> =>
 
 export const dataService = {
   uploadImage: (file: File): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
-        img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement('canvas');
           const MAX_WIDTH = 800;
@@ -67,9 +59,66 @@ export const dataService = {
           ctx?.drawImage(img, 0, 0, width, height);
           resolve(canvas.toDataURL('image/jpeg', 0.8));
         };
+        img.onerror = () => {
+          reject(new Error("Le fichier n'est pas une image valide ou est corrompu."));
+        };
+        img.src = event.target?.result as string;
       };
+      reader.onerror = () => reject(new Error("Erreur lors de la lecture du fichier."));
       reader.readAsDataURL(file);
     });
+  },
+
+  // --- CANTINE : PRODUITS ---
+  fetchProducts: () => getAll<Product>('products', []),
+  addProduct: async (p: Omit<Product, 'id'>) => {
+    const data = sanitizeData(p);
+    if (db) {
+      const res = await addDoc(collection(db, 'products'), data);
+      return dataService.fetchProducts();
+    }
+    const curr = getFromStorage<Product[]>('products', []);
+    saveToStorage('products', [...curr, { ...data, id: Date.now().toString() }]);
+    return dataService.fetchProducts();
+  },
+  updateProduct: async (p: Product) => {
+    const { id, ...data } = sanitizeData(p);
+    if (db) {
+      await updateDoc(doc(db, 'products', id), data);
+      return dataService.fetchProducts();
+    }
+    const curr = getFromStorage<Product[]>('products', []);
+    saveToStorage('products', curr.map(x => x.id === id ? { ...data, id } : x));
+    return dataService.fetchProducts();
+  },
+  deleteProduct: async (id: string) => {
+    if (db) await deleteDoc(doc(db, 'products', id));
+    else {
+      const curr = getFromStorage<Product[]>('products', []);
+      saveToStorage('products', curr.filter(x => x.id !== id));
+    }
+    return dataService.fetchProducts();
+  },
+
+  // --- CANTINE : COMMANDES ---
+  fetchFoodOrders: () => getAll<FoodOrder>('food_orders', []),
+  addFoodOrder: async (o: Omit<FoodOrder, 'id'>) => {
+    const data = sanitizeData(o);
+    if (db) await addDoc(collection(db, 'food_orders'), data);
+    else {
+      const curr = getFromStorage<FoodOrder[]>('food_orders', []);
+      saveToStorage('food_orders', [...curr, { ...data, id: Date.now().toString() }]);
+    }
+    return dataService.fetchFoodOrders();
+  },
+  updateFoodOrder: async (o: FoodOrder) => {
+    const { id, ...data } = sanitizeData(o);
+    if (db) await updateDoc(doc(db, 'food_orders', id), data);
+    else {
+      const curr = getFromStorage<FoodOrder[]>('food_orders', []);
+      saveToStorage('food_orders', curr.map(x => x.id === id ? { ...data, id } : x));
+    }
+    return dataService.fetchFoodOrders();
   },
 
   fetchMembers: async () => {
@@ -78,52 +127,39 @@ export const dataService = {
   },
   addMember: async (member: Omit<Member, 'id'>) => {
     const data = sanitizeData(member);
-    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'members'), data);
-    else { const curr = getFromStorage<Member[]>('members', []); saveToStorage('members', [...curr, { ...data, id: Date.now().toString() }]); }
+    if (db) await addDoc(collection(db, 'members'), data);
     return dataService.fetchMembers();
   },
   updateMember: async (m: Member) => {
     const { id, ...data } = sanitizeData(m);
-    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'members', id), data);
-    else { const curr = getFromStorage<Member[]>('members', []); saveToStorage('members', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    if (db) await updateDoc(doc(db, 'members', id), data);
     return dataService.fetchMembers();
   },
   deleteMember: async (id: string) => {
-    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'members', id));
-    else { const curr = getFromStorage<Member[]>('members', []); saveToStorage('members', curr.filter(x => x.id !== id)); }
+    if (db) await deleteDoc(doc(db, 'members', id));
     return dataService.fetchMembers();
   },
   updateMembersOrder: async (members: Member[]) => {
-    if (db && isAuth() && !isLocalAdmin()) { const b = writeBatch(db); members.forEach((m, i) => b.update(doc(db, 'members', m.id), { orderIndex: i })); await b.commit(); }
-    else saveToStorage('members', members.map((m, i) => ({ ...m, orderIndex: i })));
+    if (db) {
+      const b = writeBatch(db);
+      members.forEach((m, i) => b.update(doc(db, 'members', m.id), { orderIndex: i }));
+      await b.commit();
+    }
   },
 
   fetchClubs: () => getAll<Club>('clubs', []),
   addClub: async (club: Omit<Club, 'id'>) => {
     const data = sanitizeData(club);
-    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'clubs'), data);
-    else { const curr = getFromStorage<Club[]>('clubs', []); saveToStorage('clubs', [...curr, { ...data, id: Date.now().toString() }]); }
+    if (db) await addDoc(collection(db, 'clubs'), data);
     return dataService.fetchClubs();
   },
   updateClub: async (c: Club) => {
     const { id, ...data } = sanitizeData(c);
-    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'clubs', id), data);
-    else { const curr = getFromStorage<Club[]>('clubs', []); saveToStorage('clubs', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    if (db) await updateDoc(doc(db, 'clubs', id), data);
     return dataService.fetchClubs();
   },
   deleteClub: async (id: string) => {
-    if (db && isAuth() && !isLocalAdmin()) {
-        await deleteDoc(doc(db, 'clubs', id));
-        const regs = await getDocs(query(collection(db, 'club_registrations'), where('clubId', '==', id)));
-        const batch = writeBatch(db);
-        regs.forEach(r => batch.delete(r.ref));
-        await batch.commit();
-    } else { 
-        const curr = getFromStorage<Club[]>('clubs', []); 
-        saveToStorage('clubs', curr.filter(x => x.id !== id));
-        const regs = getFromStorage<ClubRegistration[]>('club_registrations', []);
-        saveToStorage('club_registrations', regs.filter(r => r.clubId !== id));
-    }
+    if (db) await deleteDoc(doc(db, 'clubs', id));
     return dataService.fetchClubs();
   },
 
@@ -133,111 +169,74 @@ export const dataService = {
   },
   addAtelier: async (a: Omit<Atelier, 'id'>) => {
     const data = sanitizeData(a);
-    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'ateliers'), data);
-    else { const curr = getFromStorage<Atelier[]>('ateliers', []); saveToStorage('ateliers', [...curr, { ...data, id: Date.now().toString() }]); }
+    if (db) await addDoc(collection(db, 'ateliers'), data);
     return dataService.fetchAteliers();
   },
   updateAtelier: async (a: Atelier) => {
     const { id, ...data } = sanitizeData(a);
-    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'ateliers', id), data);
-    else { const curr = getFromStorage<Atelier[]>('ateliers', []); saveToStorage('ateliers', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    if (db) await updateDoc(doc(db, 'ateliers', id), data);
     return dataService.fetchAteliers();
   },
   deleteAtelier: async (id: string) => {
-    if (db && isAuth() && !isLocalAdmin()) {
-        await deleteDoc(doc(db, 'ateliers', id));
-        const regs = await getDocs(query(collection(db, 'club_registrations'), where('atelierId', '==', id)));
-        const batch = writeBatch(db);
-        regs.forEach(r => batch.delete(r.ref));
-        await batch.commit();
-    } else { 
-        const curr = getFromStorage<Atelier[]>('ateliers', []); 
-        saveToStorage('ateliers', curr.filter(x => x.id !== id));
-        const regs = getFromStorage<ClubRegistration[]>('club_registrations', []);
-        saveToStorage('club_registrations', regs.filter(r => r.atelierId !== id));
-    }
+    if (db) await deleteDoc(doc(db, 'ateliers', id));
     return dataService.fetchAteliers();
   },
   updateAteliersOrder: async (ateliers: Atelier[]) => {
-    if (db && isAuth() && !isLocalAdmin()) { const b = writeBatch(db); ateliers.forEach((a, i) => b.update(doc(db, 'ateliers', a.id), { orderIndex: i })); await b.commit(); }
-    else saveToStorage('ateliers', ateliers.map((a, i) => ({ ...a, orderIndex: i })));
+    if (db) {
+      const b = writeBatch(db);
+      ateliers.forEach((a, i) => b.update(doc(db, 'ateliers', a.id), { orderIndex: i }));
+      await b.commit();
+    }
   },
 
   registerToClub: async (registration: Omit<ClubRegistration, 'id'>) => {
     const data = sanitizeData(registration);
-    if (db && !isLocalAdmin()) {
-        try { await addDoc(collection(db, 'club_registrations'), data); }
-        catch (e) { const curr = getFromStorage('club_registrations', []); saveToStorage('club_registrations', [...curr, { ...data, id: Date.now().toString() }]); }
-    } else { const curr = getFromStorage('club_registrations', []); saveToStorage('club_registrations', [...curr, { ...data, id: Date.now().toString() }]); }
+    if (db) await addDoc(collection(db, 'club_registrations'), data);
   },
   updateClubRegistration: async (reg: ClubRegistration) => {
     const { id, ...data } = sanitizeData(reg);
-    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'club_registrations', id), data);
-    else { const curr = getFromStorage<ClubRegistration[]>('club_registrations', []); saveToStorage('club_registrations', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    if (db) await updateDoc(doc(db, 'club_registrations', id), data);
   },
   fetchClubRegistrations: async (filterId?: string, isAtelier: boolean = false) => {
     const all = await getAll<ClubRegistration>('club_registrations', []);
-    
-    if (!filterId) {
-        return all.filter(r => {
-            if (r.isAtelier) return !!r.atelierId;
-            return !!r.clubId;
-        });
-    }
-
-    return all.filter(r => {
-        if (isAtelier) {
-            return r.isAtelier === true && r.atelierId === filterId;
-        } else {
-            return r.isAtelier !== true && r.clubId === filterId;
-        }
-    });
+    if (!filterId) return all;
+    return all.filter(r => isAtelier ? r.atelierId === filterId : r.clubId === filterId);
   },
   deleteClubRegistration: async (id: string) => {
-    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'club_registrations', id));
-    else { const curr = getFromStorage<ClubRegistration[]>('club_registrations', []); saveToStorage('club_registrations', curr.filter(x => x.id !== id)); }
+    if (db) await deleteDoc(doc(db, 'club_registrations', id));
   },
   resetAtelierRegistrations: async (atelierId: string) => {
-    if (db && isAuth() && !isLocalAdmin()) {
-        const q = query(collection(db, 'club_registrations'), where('atelierId', '==', atelierId), where('isAtelier', '==', true));
+    if (db) {
+        const q = query(collection(db, 'club_registrations'), where('atelierId', '==', atelierId));
         const snapshot = await getDocs(q);
         const batch = writeBatch(db);
         snapshot.forEach(d => batch.delete(d.ref));
         await batch.commit();
-    } else {
-        const curr = getFromStorage<ClubRegistration[]>('club_registrations', []);
-        saveToStorage('club_registrations', curr.filter(r => !(r.atelierId === atelierId && r.isAtelier === true)));
     }
   },
   wipeAllAteliersRegistrations: async () => {
-    if (db && isAuth() && !isLocalAdmin()) {
+    if (db) {
         const q = query(collection(db, 'club_registrations'), where('isAtelier', '==', true));
         const snapshot = await getDocs(q);
         const batch = writeBatch(db);
         snapshot.forEach(d => batch.delete(d.ref));
         await batch.commit();
-    } else {
-        const curr = getFromStorage<ClubRegistration[]>('club_registrations', []);
-        saveToStorage('club_registrations', curr.filter(r => r.isAtelier !== true));
     }
   },
 
   fetchEvents: () => getAll<Event>('events', []),
   addEvent: async (e: Omit<Event, 'id'>) => {
     const data = sanitizeData(e);
-    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'events'), data);
-    else { const curr = getFromStorage<Event[]>('events', []); saveToStorage('events', [...curr, { ...data, id: Date.now().toString() }]); }
+    if (db) await addDoc(collection(db, 'events'), data);
     return dataService.fetchEvents();
   },
   updateEvent: async (e: Event) => {
     const { id, ...data } = sanitizeData(e);
-    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'events', id), data);
-    else { const curr = getFromStorage<Event[]>('events', []); saveToStorage('events', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    if (db) await updateDoc(doc(db, 'events', id), data);
     return dataService.fetchEvents();
   },
   deleteEvent: async (id: string) => {
-    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'events', id));
-    else { const curr = getFromStorage<Event[]>('events', []); saveToStorage('events', curr.filter(x => x.id !== id)); }
+    if (db) await deleteDoc(doc(db, 'events', id));
     return dataService.fetchEvents();
   },
 
@@ -247,68 +246,263 @@ export const dataService = {
   },
   addMentor: async (m: Omit<Mentor, 'id'>) => {
     const data = sanitizeData(m);
-    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'mentors'), data);
-    else { const curr = getFromStorage<Mentor[]>('mentors', []); saveToStorage('mentors', [...curr, { ...data, id: Date.now().toString() }]); }
+    if (db) await addDoc(collection(db, 'mentors'), data);
     return dataService.fetchMentors();
   },
   updateMentor: async (m: Mentor) => {
     const { id, ...data } = sanitizeData(m);
-    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'mentors', id), data);
-    else { const curr = getFromStorage<Mentor[]>('mentors', []); saveToStorage('mentors', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    if (db) await updateDoc(doc(db, 'mentors', id), data);
     return dataService.fetchMentors();
   },
   deleteMentor: async (id: string) => {
-    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'mentors', id));
-    else { const curr = getFromStorage<Mentor[]>('mentors', []); saveToStorage('mentors', curr.filter(x => x.id !== id)); }
+    if (db) await deleteDoc(doc(db, 'mentors', id));
     return dataService.fetchMentors();
   },
   updateMentorsOrder: async (mentors: Mentor[]) => {
-    if (db && isAuth() && !isLocalAdmin()) { const b = writeBatch(db); mentors.forEach((m, i) => b.update(doc(db, 'mentors', m.id), { orderIndex: i })); await b.commit(); }
-    else saveToStorage('mentors', mentors.map((m, i) => ({ ...m, orderIndex: i })));
+    if (db) {
+      const b = writeBatch(db);
+      mentors.forEach((m, i) => b.update(doc(db, 'mentors', m.id), { orderIndex: i }));
+      await b.commit();
+    }
   },
 
   fetchDocumentRecords: () => getAll<DocumentRecord>('documents', []),
   addDocumentRecord: async (r: Omit<DocumentRecord, 'id'>) => {
     const data = sanitizeData(r);
-    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'documents'), data);
-    else { const curr = getFromStorage<DocumentRecord[]>('documents', []); saveToStorage('documents', [...curr, { ...data, id: Date.now().toString() }]); }
+    if (db) await addDoc(collection(db, 'documents'), data);
   },
 
   fetchStudents: () => getAll<Student>('students', []),
   addStudent: async (s: Omit<Student, 'id'>) => {
     const data = sanitizeData(s);
-    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'students'), data);
-    else { const curr = getFromStorage<Student[]>('students', []); saveToStorage('students', [...curr, { ...data, id: Date.now().toString() }]); }
+    if (db) await addDoc(collection(db, 'students'), data);
     return dataService.fetchStudents();
   },
   updateStudent: async (s: Student) => {
     const { id, ...data } = sanitizeData(s);
-    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'students', id), data);
-    else { const curr = getFromStorage<Student[]>('students', []); saveToStorage('students', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    if (db) await updateDoc(doc(db, 'students', id), data);
     return dataService.fetchStudents();
   },
   deleteStudent: async (id: string) => {
-    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'students', id));
-    else { const curr = getFromStorage<Student[]>('students', []); saveToStorage('students', curr.filter(x => x.id !== id)); }
+    if (db) await deleteDoc(doc(db, 'students', id));
     return dataService.fetchStudents();
   },
 
   fetchCinemaSales: () => getAll<CinemaSale>('cinema_sales', []),
   addCinemaSale: async (s: Omit<CinemaSale, 'id'>) => {
     const data = sanitizeData(s);
-    if (db && isAuth() && !isLocalAdmin()) await addDoc(collection(db, 'cinema_sales'), data);
-    else { const curr = getFromStorage<CinemaSale[]>('cinema_sales', []); saveToStorage('cinema_sales', [...curr, { ...data, id: Date.now().toString() }]); }
+    if (db) await addDoc(collection(db, 'cinema_sales'), data);
     return dataService.fetchCinemaSales();
   },
   updateCinemaSale: async (s: CinemaSale) => {
     const { id, ...data } = sanitizeData(s);
-    if (db && isAuth() && !isLocalAdmin()) await updateDoc(doc(db, 'cinema_sales', id), data);
-    else { const curr = getFromStorage<CinemaSale[]>('cinema_sales', []); saveToStorage('cinema_sales', curr.map(x => x.id === id ? { ...data, id } : x)); }
+    if (db) await updateDoc(doc(db, 'cinema_sales', id), data);
     return dataService.fetchCinemaSales();
   },
   deleteCinemaSale: async (id: string) => {
-    if (db && isAuth() && !isLocalAdmin()) await deleteDoc(doc(db, 'cinema_sales', id));
-    else { const curr = getFromStorage<CinemaSale[]>('cinema_sales', []); saveToStorage('cinema_sales', curr.filter(x => x.id !== id)); }
+    if (db) await deleteDoc(doc(db, 'cinema_sales', id));
     return dataService.fetchCinemaSales();
+  },
+
+  fetchGalleryItems: () => getAll<GalleryItem>('gallery', []),
+  addGalleryItem: async (item: Omit<GalleryItem, 'id'>) => {
+    const data = sanitizeData(item);
+    if (db) await addDoc(collection(db, 'gallery'), data);
+    else {
+      const curr = getFromStorage<GalleryItem[]>('gallery', []);
+      saveToStorage('gallery', [...curr, { ...data, id: Date.now().toString() }]);
+    }
+    return dataService.fetchGalleryItems();
+  },
+  addGalleryItems: async (items: Omit<GalleryItem, 'id'>[]) => {
+    if (db) {
+      // On utilise des lots (batches) pour éviter de surcharger Firebase
+      const chunkSize = 50;
+      for (let i = 0; i < items.length; i += chunkSize) {
+        const chunk = items.slice(i, i + chunkSize);
+        const batch = writeBatch(db);
+        chunk.forEach(item => {
+          const docRef = doc(collection(db, 'gallery'));
+          batch.set(docRef, sanitizeData(item));
+        });
+        await batch.commit();
+      }
+    } else {
+      const curr = getFromStorage<GalleryItem[]>('gallery', []);
+      const newItems = items.map((item, index) => ({ ...item, id: Date.now().toString() + index }));
+      saveToStorage('gallery', [...curr, ...newItems]);
+    }
+    return dataService.fetchGalleryItems();
+  },
+  deleteGalleryItem: async (id: string) => {
+    if (db) await deleteDoc(doc(db, 'gallery', id));
+    else {
+      const curr = getFromStorage<GalleryItem[]>('gallery', []);
+      saveToStorage('gallery', curr.filter(x => x.id !== id));
+    }
+    return dataService.fetchGalleryItems();
+  },
+  deleteGalleryItems: async (ids: string[]) => {
+    if (db) {
+      const chunkSize = 50;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const batch = writeBatch(db);
+        chunk.forEach(id => {
+          const docRef = doc(db, 'gallery', id);
+          batch.delete(docRef);
+        });
+        await batch.commit();
+      }
+    } else {
+      const curr = getFromStorage<GalleryItem[]>('gallery', []);
+      saveToStorage('gallery', curr.filter(x => !ids.includes(x.id)));
+    }
+    return dataService.fetchGalleryItems();
+  },
+
+  // --- ASSINIE : REGISTRATIONS ---
+  fetchAssinieRegistrations: () => getAll<AssinieRegistration>('assinie_registrations', []),
+  addAssinieRegistration: async (r: Omit<AssinieRegistration, 'id'>) => {
+    const data = sanitizeData(r);
+    if (db) {
+      await addDoc(collection(db, 'assinie_registrations'), data);
+      return dataService.fetchAssinieRegistrations();
+    }
+    const curr = getFromStorage<AssinieRegistration[]>('assinie_registrations', []);
+    saveToStorage('assinie_registrations', [...curr, { ...data, id: Date.now().toString() }]);
+    return dataService.fetchAssinieRegistrations();
+  },
+  updateAssinieRegistration: async (r: AssinieRegistration) => {
+    const { id, ...data } = sanitizeData(r);
+    if (db) {
+      await updateDoc(doc(db, 'assinie_registrations', id), data);
+      return dataService.fetchAssinieRegistrations();
+    }
+    const curr = getFromStorage<AssinieRegistration[]>('assinie_registrations', []);
+    saveToStorage('assinie_registrations', curr.map(x => x.id === id ? { ...data, id } : x));
+    return dataService.fetchAssinieRegistrations();
+  },
+  deleteAssinieRegistration: async (id: string) => {
+    if (db) {
+      await deleteDoc(doc(db, 'assinie_registrations', id));
+      return dataService.fetchAssinieRegistrations();
+    }
+    const curr = getFromStorage<AssinieRegistration[]>('assinie_registrations', []);
+    saveToStorage('assinie_registrations', curr.filter(x => x.id !== id));
+    return dataService.fetchAssinieRegistrations();
+  },
+
+  // --- NAZA : REGISTRATIONS ---
+  fetchNazaRegistrations: () => getAll<NazaRegistration>('naza_registrations', []),
+  addNazaRegistration: async (r: Omit<NazaRegistration, 'id'>) => {
+    const data = sanitizeData(r);
+    if (db) {
+      await addDoc(collection(db, 'naza_registrations'), data);
+      return dataService.fetchNazaRegistrations();
+    }
+    const curr = getFromStorage<NazaRegistration[]>('naza_registrations', []);
+    saveToStorage('naza_registrations', [...curr, { ...data, id: Date.now().toString() }]);
+    return dataService.fetchNazaRegistrations();
+  },
+  updateNazaRegistration: async (r: NazaRegistration) => {
+    const { id, ...data } = sanitizeData(r);
+    if (db) {
+      await updateDoc(doc(db, 'naza_registrations', id), data);
+      return dataService.fetchNazaRegistrations();
+    }
+    const curr = getFromStorage<NazaRegistration[]>('naza_registrations', []);
+    saveToStorage('naza_registrations', curr.map(x => x.id === id ? { ...data, id } : x));
+    return dataService.fetchNazaRegistrations();
+  },
+  deleteNazaRegistration: async (id: string) => {
+    if (db) {
+      await deleteDoc(doc(db, 'naza_registrations', id));
+      return dataService.fetchNazaRegistrations();
+    }
+    const curr = getFromStorage<NazaRegistration[]>('naza_registrations', []);
+    saveToStorage('naza_registrations', curr.filter(x => x.id !== id));
+    return dataService.fetchNazaRegistrations();
+  },
+
+  // --- PROSPECTS CAMPAIGNS ---
+  fetchProspects: () => getAll<ProspectContact>('prospect_contacts', []),
+  addProspect: async (p: Omit<ProspectContact, 'id'>) => {
+    const data = sanitizeData(p);
+    if (db) {
+      const res = await addDoc(collection(db, 'prospect_contacts'), data);
+      return dataService.fetchProspects();
+    }
+    const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
+    saveToStorage('prospect_contacts', [...curr, { ...data, id: Date.now().toString() }]);
+    return dataService.fetchProspects();
+  },
+  updateProspect: async (p: ProspectContact) => {
+    const { id, ...data } = sanitizeData(p);
+    if (db) {
+      await updateDoc(doc(db, 'prospect_contacts', id), data);
+      return dataService.fetchProspects();
+    }
+    const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
+    saveToStorage('prospect_contacts', curr.map(x => x.id === id ? { ...data, id } : x));
+    return dataService.fetchProspects();
+  },
+  deleteProspect: async (id: string) => {
+    if (db) {
+      await deleteDoc(doc(db, 'prospect_contacts', id));
+    } else {
+      const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
+      saveToStorage('prospect_contacts', curr.filter(x => x.id !== id));
+    }
+    return dataService.fetchProspects();
+  },
+  saveProspectsBulk: async (contacts: ProspectContact[]) => {
+    if (db) {
+      try {
+        const snapshot = await getDocs(collection(db, 'prospect_contacts'));
+        const deleteBatch = writeBatch(db);
+        snapshot.forEach(d => deleteBatch.delete(d.ref));
+        await deleteBatch.commit();
+
+        const addBatch = writeBatch(db);
+        contacts.forEach(c => {
+          const docRef = doc(collection(db, 'prospect_contacts'));
+          const { id, ...data } = c;
+          addBatch.set(docRef, sanitizeData(data));
+        });
+        await addBatch.commit();
+      } catch (error) {
+        console.warn("Error saving prospects bulk in Firestore, falling back to local:", error);
+        saveToStorage('prospect_contacts', contacts);
+      }
+    } else {
+      saveToStorage('prospect_contacts', contacts);
+    }
+    return dataService.fetchProspects();
+  },
+  fetchCampaignTemplate: async (): Promise<string> => {
+    if (db) {
+      try {
+        const docSnap = await getDoc(doc(db, 'campaign_templates', 'default'));
+        if (docSnap.exists()) {
+          return docSnap.data().body || '';
+        }
+      } catch (error) {
+        console.warn("Error fetching template from Firestore:", error);
+      }
+    }
+    return getFromStorage<string>('campaign_template_body', "Bonjour {prenom} {nom},\n\nNous avons le plaisir de vous recontacter suite à votre intérêt pour l'IFRAN. Quelles sont vos disponibilités pour un échange téléphonique ?\n\nCordialement,\nLe BDE IFRAN");
+  },
+  saveCampaignTemplate: async (body: string) => {
+    if (db) {
+      try {
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(doc(db, 'campaign_templates', 'default'), { body });
+      } catch (error) {
+        console.warn("Error saving template to Firestore:", error);
+      }
+    }
+    saveToStorage('campaign_template_body', body);
+    return body;
   }
 };

@@ -1,7 +1,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Student, Club, CinemaSale } from '../types';
+import { Student, Club, CinemaSale, FoodOrder } from '../types';
 
 export interface EmailData {
     evtName: string;
@@ -24,6 +24,51 @@ export interface MeetingData {
     meetPoints: string;
     meetDecisions: string;
 }
+
+export const generateCanteenReport = (orders: FoodOrder[], range: { start: string; end: string }) => {
+  const doc = new jsPDF();
+  const total = orders.reduce((acc, o) => acc + o.totalPrice, 0);
+  
+  // Header
+  doc.setFontSize(20);
+  doc.setTextColor(15, 30, 58); // Navy
+  doc.text("Bilan des Ventes Cantine - BDE IFRAN", 105, 20, { align: 'center' });
+  
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Période du ${new Date(range.start).toLocaleDateString()} au ${new Date(range.end).toLocaleDateString()}`, 105, 28, { align: 'center' });
+  
+  doc.setFontSize(12);
+  doc.setTextColor(0);
+  doc.text(`Nombre de commandes : ${orders.length}`, 14, 40);
+  doc.setFont("helvetica", "bold");
+  doc.text(`RECETTE TOTALE : ${total.toLocaleString()} FCFA`, 14, 48);
+  doc.setFont("helvetica", "normal");
+
+  const tableData = orders.map(o => [
+    new Date(o.createdAt).toLocaleDateString() + ' ' + new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+    o.pickupTime,
+    `${o.studentFirstName} ${o.studentName} (${o.studentClass})`,
+    o.items.map(i => `${i.quantity}x ${i.productName}`).join('\n'),
+    `${o.totalPrice.toLocaleString()} F`
+  ]);
+
+  autoTable(doc, {
+    startY: 55,
+    head: [['Heure Commande', 'Heure Retrait', 'Client', 'Détails Commande', 'Total']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: { fillColor: [15, 30, 58], fontSize: 10 },
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      4: { halign: 'right', fontStyle: 'bold' }
+    }
+  });
+
+  doc.text("Document généré par le site du BDE.", 14, (doc as any).lastAutoTable.finalY + 20);
+
+  doc.save(`Bilan_Cantine_${range.start}_au_${range.end}.pdf`);
+};
 
 export const generateCotisationReport = (students: Student[]) => {
   const doc = new jsPDF();

@@ -29,8 +29,7 @@ const AdminContributions = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
   const levels = [
-    "Prépa 1", "Prépa 2", 
-    "Prépa Com", "Prépa Dev", "Prépa Créa",
+    "B1 COM", "B1 CREA", "B1 DEV",
     "B2 Com", "B2 Dev", "B2 Créa",
     "B3 Com", "B3 Dev", "B3 Créa",
     "Master 1", "Master 2"

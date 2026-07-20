@@ -31,7 +31,7 @@ export interface Atelier {
 export interface ClubRegistration {
   id: string;
   clubId?: string;
-  atelierId?: string; // Référence à l'atelier indépendant
+  atelierId?: string;
   studentName: string;
   studentLevel: string;
   date: string;
@@ -41,7 +41,7 @@ export interface ClubRegistration {
 export interface Event {
   id: string;
   title: string;
-  date: string; // ISO string
+  date: string;
   location: string;
   description: string;
   imageUrl: string;
@@ -78,6 +78,39 @@ export interface CinemaSale {
   status: 'paid' | 'reserved';
 }
 
+// NOUVEAUX TYPES CANTINE
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  category: string;
+  imageUrl?: string;
+  isAvailable: boolean;
+}
+
+export interface OrderItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+}
+
+export interface FoodOrder {
+  id: string;
+  studentName: string;
+  studentFirstName: string;
+  studentClass: string;
+  studentPhone: string;
+  items: OrderItem[];
+  totalPrice: number;
+  pickupDate: string;
+  pickupTime: string;
+  notes?: string;
+  status: 'pending' | 'validated' | 'preparing' | 'ready' | 'delivered';
+  createdAt: string;
+}
+
 export interface DocumentRecord {
   id: string;
   type: 'email' | 'meeting' | 'finance';
@@ -86,9 +119,51 @@ export interface DocumentRecord {
   data: any;
 }
 
+export interface GalleryItem {
+  id: string;
+  clubId: string;
+  eventName: string;
+  type: 'photo' | 'video';
+  url: string;
+  createdAt: string;
+}
+
+export interface AssinieRegistration {
+  id: string;
+  studentName: string;
+  studentClass: string;
+  phone: string;
+  needsGlaciere?: boolean;
+  registrationDate: string;
+}
+
+export interface NazaRegistration {
+  id: string;
+  studentName: string;
+  studentClass: string;
+  phone: string;
+  registrationDate: string;
+}
+
 export interface Stats {
   totalStudents: number;
   totalCollected: number;
   activeClubs: number;
   eventsCount: number;
 }
+
+export interface ProspectContact {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  status: 'to_do' | 'in_progress' | 'sent' | 'ignored';
+  notes?: string;
+  lastContactedAt?: string;
+}
+
+export interface CampaignTemplate {
+  id: string;
+  body: string;
+}
+
