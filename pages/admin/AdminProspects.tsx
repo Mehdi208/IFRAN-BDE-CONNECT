@@ -40,6 +40,7 @@ const AdminProspects = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'sheets' | 'descartes' | 'all'>('sheets');
   const [schoolFilter, setSchoolFilter] = useState<'all' | 'descartes' | 'other'>('all');
   const [templateBody, setTemplateBody] = useState('');
   const [parentTemplateBody, setParentTemplateBody] = useState('');
@@ -67,6 +68,7 @@ const AdminProspects = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProspect, setEditingProspect] = useState<ProspectContact | null>(null);
   const [formProspect, setFormProspect] = useState<Partial<ProspectContact>>({
+    category: 'sheets',
     firstName: '',
     lastName: '',
     phone: '',
@@ -82,10 +84,11 @@ const AdminProspects = () => {
   // Helper to check if a prospect is from Lycée International Descartes
   const isDescartesProspect = (p: ProspectContact | null): boolean => {
     if (!p) return false;
+    if (p.category === 'descartes') return true;
+    if (p.category === 'sheets') return false;
     const ecoleVal = getCustomFieldValue(p.customFields, 'École de provenance');
     if (ecoleVal && ecoleVal.toLowerCase().includes('descartes')) return true;
-    const allText = `${p.notes || ''} ${p.firstName || ''} ${p.lastName || ''} ${JSON.stringify(p.customFields || {})}`.toLowerCase();
-    return allText.includes('descartes');
+    return false;
   };
 
   // Campaign auto-advance handler
@@ -388,6 +391,7 @@ const AdminProspects = () => {
 
       if (firstName || lastName || cleanPhone || cleanParentPhone || whatsappLink) {
         parsed.push({
+          category: 'sheets',
           firstName: firstName || 'Prospect',
           lastName: lastName || '',
           phone: cleanPhone || '',
@@ -511,6 +515,7 @@ const AdminProspects = () => {
 
       if ((firstName && firstName !== 'Prospect') || lastName || phone) {
         parsed.push({
+          category: 'descartes',
           firstName: firstName || 'Prospect',
           lastName: lastName || '',
           phone: phone || '',
@@ -543,6 +548,8 @@ const AdminProspects = () => {
         return;
       }
 
+      const defaultCategory = importMode === 'descartes_pdf' ? 'descartes' : (categoryFilter === 'descartes' ? 'descartes' : 'sheets');
+
       const merge = window.confirm(`Détecté ${parsed.length} contacts. Souhaitez-vous AJOUTER ces contacts à la liste existante ?\n(Cliquez sur "Annuler" pour REMPLACER la liste actuelle)`);
       
       let newList: ProspectContact[];
@@ -551,12 +558,14 @@ const AdminProspects = () => {
         parsed.forEach(p => {
           newList.push({
             ...p,
+            category: p.category || defaultCategory,
             id: 'local_' + Math.random().toString(36).substr(2, 9)
           } as ProspectContact);
         });
       } else {
         newList = parsed.map(p => ({
           ...p,
+          category: p.category || defaultCategory,
           id: 'local_' + Math.random().toString(36).substr(2, 9)
         } as ProspectContact));
       }
@@ -595,6 +604,8 @@ const AdminProspects = () => {
           return;
         }
 
+        const defaultCategory = importMode === 'descartes_pdf' ? 'descartes' : (categoryFilter === 'descartes' ? 'descartes' : 'sheets');
+
         const merge = window.confirm(`Détecté ${parsed.length} contacts. Souhaitez-vous AJOUTER ces contacts à la liste existante ?\n(Cliquez sur "Annuler" pour REMPLACER la liste actuelle)`);
         
         let newList: ProspectContact[];
@@ -603,12 +614,14 @@ const AdminProspects = () => {
           parsed.forEach(p => {
             newList.push({
               ...p,
+              category: p.category || defaultCategory,
               id: 'local_' + Math.random().toString(36).substr(2, 9)
             } as ProspectContact);
           });
         } else {
           newList = parsed.map(p => ({
             ...p,
+            category: p.category || defaultCategory,
             id: 'local_' + Math.random().toString(36).substr(2, 9)
           } as ProspectContact));
         }
@@ -642,14 +655,15 @@ const AdminProspects = () => {
   };
 
   const handleClearAll = async () => {
-    if (window.confirm("⚠️ Attention : Voulez-vous vraiment supprimer TOUS les contacts de la campagne ? Cette action est irréversible.")) {
+    if (window.confirm("⚠️ Attention : Voulez-vous vraiment supprimer TOUS les contacts de la base de données ? Cette action est irréversible et vous permettra de ré-importer vos données proprement.")) {
       try {
-        const updated = await dataService.saveProspectsBulk([]);
+        const updated = await dataService.deleteAllProspects();
         setProspects(updated);
         setActiveContactId(null);
-        showTemporarySuccess("Toutes les données de la campagne ont été effacées.");
+        setSelectedIds([]);
+        showTemporarySuccess("Toutes les données de la base ont été définitivement supprimées.");
       } catch (e) {
-        alert("Erreur lors de la réinitialisation");
+        alert("Erreur lors de la réinitialisation de la base de données.");
       }
     }
   };
@@ -669,11 +683,13 @@ const AdminProspects = () => {
 
   const openAddModal = () => {
     setEditingProspect(null);
+    const initialCategory = categoryFilter === 'descartes' ? 'descartes' : 'sheets';
     const initialCustomFields: Record<string, string> = {};
-    if (schoolFilter === 'descartes') {
+    if (initialCategory === 'descartes') {
       initialCustomFields['École de provenance'] = 'Lycée International Descartes';
     }
     setFormProspect({
+      category: initialCategory,
       firstName: '',
       lastName: '',
       phone: '',
@@ -686,7 +702,10 @@ const AdminProspects = () => {
 
   const openEditModal = (p: ProspectContact) => {
     setEditingProspect(p);
-    setFormProspect(p);
+    setFormProspect({
+      ...p,
+      category: p.category || (isDescartesProspect(p) ? 'descartes' : 'sheets')
+    });
     setIsEditModalOpen(true);
   };
 
@@ -699,18 +718,28 @@ const AdminProspects = () => {
 
     try {
       let updated: ProspectContact[];
+      const cat = formProspect.category || (categoryFilter === 'descartes' ? 'descartes' : 'sheets');
+      const customF = { ...(formProspect.customFields || {}) };
+      if (cat === 'descartes' && !customF['École de provenance']) {
+        customF['École de provenance'] = 'Lycée International Descartes';
+      }
+
       if (editingProspect) {
         updated = await dataService.updateProspect({
           ...editingProspect,
-          ...formProspect
+          ...formProspect,
+          category: cat,
+          customFields: customF
         } as ProspectContact);
       } else {
         updated = await dataService.addProspect({
+          category: cat,
           firstName: formProspect.firstName,
           lastName: formProspect.lastName || '',
           phone: formProspect.phone,
           status: formProspect.status || 'to_do',
-          notes: formProspect.notes || ''
+          notes: formProspect.notes || '',
+          customFields: customF
         });
       }
       setProspects(updated);
@@ -899,6 +928,10 @@ const AdminProspects = () => {
   // Live filtered list of prospects
   const filteredProspects = useMemo(() => {
     return prospects.filter(p => {
+      // Category filter
+      if (categoryFilter === 'sheets' && isDescartesProspect(p)) return false;
+      if (categoryFilter === 'descartes' && !isDescartesProspect(p)) return false;
+
       const matchSearch = 
         p.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -917,7 +950,19 @@ const AdminProspects = () => {
       
       return matchSearch && matchStatus && matchSchool;
     });
-  }, [prospects, searchTerm, statusFilter, schoolFilter]);
+  }, [prospects, categoryFilter, searchTerm, statusFilter, schoolFilter]);
+
+  // 1er Google Sheets specific statistics
+  const sheetsStats = useMemo(() => {
+    const list = prospects.filter(p => !isDescartesProspect(p));
+    const total = list.length;
+    const toDo = list.filter(p => p.status === 'to_do').length;
+    const inProgress = list.filter(p => p.status === 'in_progress').length;
+    const sent = list.filter(p => p.status === 'sent').length;
+    const ignored = list.filter(p => p.status === 'ignored').length;
+    const progressPercent = total > 0 ? Math.round((sent / total) * 100) : 0;
+    return { total, toDo, inProgress, sent, ignored, progressPercent };
+  }, [prospects]);
 
   // Descartes specific statistics
   const descartesStats = useMemo(() => {
@@ -1009,6 +1054,14 @@ const AdminProspects = () => {
               <FileDown size={16} />
               Exporter CSV
             </button>
+            <button
+              onClick={handleClearAll}
+              className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-sm font-bold flex items-center gap-1.5 border border-red-200 transition-colors"
+              title="Supprimer définitivement toutes les données pour ré-importer vos fichiers"
+            >
+              <Trash2 size={16} />
+              Vider la base
+            </button>
           </div>
         </div>
 
@@ -1019,6 +1072,73 @@ const AdminProspects = () => {
             <p className="text-sm font-medium">{successMessage}</p>
           </div>
         )}
+
+        {/* Primary Database Category Selector Tabs */}
+        <div className="bg-white p-3.5 rounded-2xl shadow-sm border border-gray-200/80 mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => {
+                setCategoryFilter('sheets');
+                setImportMode('standard');
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                categoryFilter === 'sheets'
+                  ? 'bg-bde-navy text-white shadow-md ring-2 ring-slate-400'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <FileText size={16} />
+              Catégorie 1 : 1er Google Sheets
+              <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+                categoryFilter === 'sheets' ? 'bg-white text-bde-navy' : 'bg-gray-200 text-gray-800'
+              }`}>
+                {sheetsStats.total}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setCategoryFilter('descartes');
+                setImportMode('descartes_pdf');
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                categoryFilter === 'descartes'
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-md ring-2 ring-indigo-300'
+                  : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
+              }`}
+            >
+              <GraduationCap size={16} className={categoryFilter === 'descartes' ? 'text-yellow-300' : 'text-indigo-600'} />
+              Catégorie 2 : Lycée International Descartes
+              <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+                categoryFilter === 'descartes' ? 'bg-white text-indigo-900' : 'bg-indigo-200 text-indigo-800'
+              }`}>
+                {descartesStats.total}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setCategoryFilter('all')}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                categoryFilter === 'all'
+                  ? 'bg-gray-800 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Building2 size={15} />
+              Toutes les catégories ({stats.total})
+            </button>
+          </div>
+
+          {prospects.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors"
+            >
+              <Trash2 size={14} />
+              Effacer tout
+            </button>
+          )}
+        </div>
 
         {/* Campaign Metrics Section */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
@@ -1964,6 +2084,45 @@ const AdminProspects = () => {
               {editingProspect ? "Modifier le prospect" : "Nouveau prospect"}
             </h2>
             <form onSubmit={handleSaveProspect} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">Catégorie / Base de données</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormProspect(prev => {
+                        const newFields = { ...(prev.customFields || {}) };
+                        delete newFields['École de provenance'];
+                        return { ...prev, category: 'sheets', customFields: newFields };
+                      });
+                    }}
+                    className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
+                      formProspect.category !== 'descartes'
+                        ? 'bg-bde-navy text-white border-bde-navy shadow-xs'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    1er Google Sheets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormProspect(prev => {
+                        const newFields = { ...(prev.customFields || {}), 'École de provenance': 'Lycée International Descartes' };
+                        return { ...prev, category: 'descartes', customFields: newFields };
+                      });
+                    }}
+                    className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
+                      formProspect.category === 'descartes'
+                        ? 'bg-indigo-700 text-white border-indigo-700 shadow-xs'
+                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                    }`}
+                  >
+                    Lycée Descartes
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Prénom *</label>

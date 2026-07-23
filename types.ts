@@ -155,6 +155,7 @@ export interface Stats {
 export interface ProspectContact {
   id: string;
   userId?: string;
+  category?: 'sheets' | 'descartes' | string; // 'sheets' = 1er Google Sheets, 'descartes' = Lycée International Descartes
   firstName: string;
   lastName: string;
   phone: string; // Tél. jeune

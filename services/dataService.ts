@@ -496,6 +496,26 @@ export const dataService = {
     saveToStorage('prospect_contacts', updated);
     return updated;
   },
+  deleteAllProspects: async () => {
+    const userId = auth.currentUser?.uid;
+    saveToStorage('prospect_contacts', []);
+    if (db) {
+      try {
+        const q = userId ? query(collection(db, 'prospect_contacts'), where('userId', '==', userId)) : query(collection(db, 'prospect_contacts'));
+        const snapshot = await getDocs(q);
+        const docsToDelete = snapshot.docs;
+        for (let i = 0; i < docsToDelete.length; i += 400) {
+          const deleteBatch = writeBatch(db);
+          const chunk = docsToDelete.slice(i, i + 400);
+          chunk.forEach(d => deleteBatch.delete(d.ref));
+          await deleteBatch.commit();
+        }
+      } catch (error) {
+        console.warn("Error deleting all prospects in Firestore:", error);
+      }
+    }
+    return [];
+  },
   saveProspectsBulk: async (contacts: ProspectContact[]) => {
     const userId = auth.currentUser?.uid;
     // Always sync with localStorage immediately so state is never lost
