@@ -193,6 +193,20 @@ const AdminProspects = () => {
     }, 50);
   };
 
+  const getCustomFieldValue = (customFields?: Record<string, string>, targetKey?: string) => {
+    if (!customFields || !targetKey) return '-';
+    if (customFields[targetKey]) return customFields[targetKey];
+    
+    const normTarget = targetKey.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    for (const [k, v] of Object.entries(customFields)) {
+      const normK = k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      if (normK === normTarget || normK.includes(normTarget) || normTarget.includes(normK)) {
+        return v;
+      }
+    }
+    return '-';
+  };
+
   // Parse CSV / Tabulated copy-paste
   const parseImportedText = (text: string): Omit<ProspectContact, 'id'>[] => {
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
@@ -208,38 +222,54 @@ const AdminProspects = () => {
     
     // Analyze headers
     const firstLineCols = firstLine.split(separator).map(c => c.trim());
-    const firstLineColsLower = firstLineCols.map(c => c.toLowerCase());
-    
-    const firstNameHeaders = ['prénom', 'prenom', 'first name', 'firstname', 'nom1', 'first', 'nom et prénom', 'nom et prenom', 'nom complet', 'nom'];
-    const lastNameHeaders = ['nom', 'last name', 'lastname', 'family name', 'surname', 'last'];
-    const phoneHeaders = ['téléphone', 'telephone', 'tél', 'tel', 'phone', 'phone number', 'numéro', 'numero', 'whatsapp', 'tel', 'num', 'contact', 'cell'];
-    const youthPhoneHeaders = ['jeune', 'eleve', 'élève', 'enfant', 'candidat'];
-    const parentPhoneHeaders = ['parent', 'pere', 'père', 'mere', 'mère', 'tuteur'];
+    const firstLineColsLower = firstLineCols.map(c => c.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
+
+    const isPhoneString = (str: string) => {
+      if (!str) return false;
+      const digits = str.replace(/[^0-9]/g, '');
+      return digits.length >= 8 && digits.length <= 15;
+    };
+
+    const firstNameHeaders = ['prenom', 'first name', 'firstname', 'nom1', 'first', 'nom et prenom', 'nom & prenom', 'nom prenom', 'nom complet', 'candidat', 'etudiant', 'eleve', 'contact'];
+    const lastNameHeaders = ['nom', 'last name', 'lastname', 'surname', 'family name'];
+    const phoneHeaders = ['telephone', 'tel', 'phone', 'numero', 'num', 'whatsapp', 'cell', 'mobile'];
+    const youthHeaders = ['jeune', 'eleve', 'enfant', 'candidat', 'etudiant'];
+    const parentHeaders = ['parent', 'pere', 'mere', 'tuteur'];
     const linkHeaders = ['lien', 'lien whatsapp', 'url', 'whatsapp link'];
-    const statusHeaders = ['statut', 'status', 'état', 'etat'];
+    const statusHeaders = ['statut', 'status', 'etat'];
 
     let firstNameIdx = firstLineColsLower.findIndex(col => firstNameHeaders.some(h => col === h || col.includes(h)));
-    let lastNameIdx = firstLineColsLower.findIndex(col => lastNameHeaders.some(h => col === h || col.includes(h)) && col !== 'nom et prénom' && col !== 'nom'); // 'nom' can be ambiguous, let's just let it be caught by firstNameIdx if 'nom et prenom'
-    
-    let youthPhoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)) && youthPhoneHeaders.some(y => col.includes(y)));
-    let parentPhoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)) && parentPhoneHeaders.some(p => col.includes(p)));
-    let genericPhoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)) && youthPhoneIdx !== firstLineColsLower.indexOf(col) && parentPhoneIdx !== firstLineColsLower.indexOf(col));
+    let lastNameIdx = firstLineColsLower.findIndex(col => lastNameHeaders.some(h => col === h || col === 'nom') && col !== 'nom et prenom' && col !== 'nom & prenom' && col !== 'nom prenom');
+
+    // If 'Nom' was found and NO 'Prénom' was found, treat 'Nom' as full name (firstNameIdx)
+    if (firstNameIdx === -1 && lastNameIdx !== -1) {
+      firstNameIdx = lastNameIdx;
+      lastNameIdx = -1;
+    }
+
+    let youthPhoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)) && youthHeaders.some(y => col.includes(y)));
+    let parentPhoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)) && parentHeaders.some(p => col.includes(p)));
+    let genericPhoneIdx = firstLineColsLower.findIndex((col, idx) => phoneHeaders.some(h => col.includes(h)) && idx !== youthPhoneIdx && idx !== parentPhoneIdx);
 
     if (youthPhoneIdx === -1 && genericPhoneIdx !== -1) {
       youthPhoneIdx = genericPhoneIdx;
+      let secondGenericPhoneIdx = firstLineColsLower.findIndex((col, idx) => phoneHeaders.some(h => col.includes(h)) && idx !== youthPhoneIdx && idx !== parentPhoneIdx);
+      if (secondGenericPhoneIdx !== -1) {
+        parentPhoneIdx = secondGenericPhoneIdx;
+      }
     }
 
     let linkIdx = firstLineColsLower.findIndex(col => linkHeaders.some(h => col.includes(h)));
     let statusIdx = firstLineColsLower.findIndex(col => statusHeaders.some(h => col.includes(h)));
 
-    const hasHeaders = firstNameIdx !== -1 || youthPhoneIdx !== -1 || parentPhoneIdx !== -1 || linkIdx !== -1;
+    const firstLineHasPhoneNumbers = firstLineCols.some(col => isPhoneString(col));
+    const hasHeaders = !firstLineHasPhoneNumbers && (firstNameIdx !== -1 || youthPhoneIdx !== -1 || parentPhoneIdx !== -1 || linkIdx !== -1 || lastNameIdx !== -1);
     const startIdx = hasHeaders ? 1 : 0;
 
-    // Collect custom columns indices
-    const customCols: { name: string; idx: number }[] = [];
+    const customCols: { name: string, idx: number }[] = [];
     if (hasHeaders) {
       firstLineCols.forEach((colName, idx) => {
-        if (idx !== firstNameIdx && idx !== lastNameIdx && idx !== youthPhoneIdx && idx !== parentPhoneIdx && idx !== genericPhoneIdx && idx !== linkIdx && idx !== statusIdx && colName.trim() !== '') {
+        if (idx !== firstNameIdx && idx !== lastNameIdx && idx !== youthPhoneIdx && idx !== parentPhoneIdx && idx !== linkIdx && idx !== statusIdx && colName.trim() !== '') {
           customCols.push({ name: colName.trim(), idx });
         }
       });
@@ -273,38 +303,44 @@ const AdminProspects = () => {
 
         customCols.forEach(cc => {
           if (cols[cc.idx] !== undefined && cols[cc.idx].trim() !== '') {
-            customFields[cc.name] = cols[cc.idx];
+            let key = cc.name;
+            const norm = key.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (norm === 'classe' || norm === 'niveau') key = 'Classe';
+            if (norm === 'ecole de provenance' || norm === 'ecole' || norm === 'etablissement' || norm === 'lycee') key = 'École de provenance';
+            if (norm === 'filiere souhaitee' || norm === 'filiere' || norm === 'filiere choisie') key = 'Filière souhaitée';
+            customFields[key] = cols[cc.idx];
           }
         });
       } else {
-        // Fallback column guessing if NO headers were found
-        if (cols.length >= 6) {
-          const nameParts = cols[0].split(/\s+/);
+        // Smart fallback without headers
+        const phoneCols: { val: string, idx: number }[] = [];
+        const nonPhoneCols: { val: string, idx: number }[] = [];
+
+        cols.forEach((col, idx) => {
+          if (isPhoneString(col)) {
+            phoneCols.push({ val: col, idx });
+          } else if (col !== '') {
+            nonPhoneCols.push({ val: col, idx });
+          }
+        });
+
+        if (phoneCols.length > 0) {
+          phone = phoneCols[0].val;
+          if (phoneCols.length > 1) parentPhoneStr = phoneCols[1].val;
+        }
+
+        if (nonPhoneCols.length > 0) {
+          const nameParts = nonPhoneCols[0].val.split(/\s+/);
           firstName = nameParts[0] || '';
           lastName = nameParts.slice(1).join(' ') || '';
-          customFields['Classe'] = cols[1];
-          customFields['École de provenance'] = cols[2];
-          phone = cols[3];
-          parentPhoneStr = cols[4];
-          customFields['Filière souhaitée'] = cols[5];
-          for (let cIdx = 6; cIdx < cols.length; cIdx++) {
-            customFields[`Colonne ${cIdx + 1}`] = cols[cIdx];
-          }
-        } else if (cols.length >= 3) {
-          firstName = cols[0];
-          lastName = cols[1];
-          phone = cols[2];
-          for (let cIdx = 3; cIdx < cols.length; cIdx++) {
-            customFields[`Colonne ${cIdx + 1}`] = cols[cIdx];
-          }
-        } else if (cols.length === 2) {
-          const nameParts = cols[0].split(/\s+/);
-          firstName = nameParts[0] || '';
-          lastName = nameParts.slice(1).join(' ') || '';
-          phone = cols[1];
-        } else if (cols.length === 1) {
-          firstName = 'Prospect';
-          phone = cols[0];
+        }
+
+        if (nonPhoneCols.length >= 2) customFields['Classe'] = nonPhoneCols[1].val;
+        if (nonPhoneCols.length >= 3) customFields['École de provenance'] = nonPhoneCols[2].val;
+        if (nonPhoneCols.length >= 4) customFields['Filière souhaitée'] = nonPhoneCols[3].val;
+
+        for (let k = 4; k < nonPhoneCols.length; k++) {
+          customFields[`Info ${k + 1}`] = nonPhoneCols[k].val;
         }
       }
 
@@ -352,7 +388,6 @@ const AdminProspects = () => {
         return;
       }
 
-      // Bulk save (replaces current list, or prompts to add to it)
       const merge = window.confirm(`Détecté ${parsed.length} contacts. Souhaitez-vous AJOUTER ces contacts à la liste existante ?\n(Cliquez sur "Annuler" pour REMPLACER la liste actuelle)`);
       
       let newList: ProspectContact[];
@@ -372,11 +407,12 @@ const AdminProspects = () => {
       }
 
       const updated = await dataService.saveProspectsBulk(newList);
-      setProspects(updated);
+      const finalProspects = (updated && updated.length > 0) ? updated : newList;
+      setProspects(finalProspects);
       setIsPasteOpen(false);
       setPasteText('');
-      if (updated.length > 0) {
-        setActiveContactId(updated[0].id);
+      if (finalProspects.length > 0) {
+        setActiveContactId(finalProspects[0].id);
       }
       showTemporarySuccess(`Importation réussie : ${parsed.length} contacts synchronisés !`);
     } catch (e) {
@@ -420,9 +456,10 @@ const AdminProspects = () => {
         }
 
         const updated = await dataService.saveProspectsBulk(newList);
-        setProspects(updated);
-        if (updated.length > 0) {
-          setActiveContactId(updated[0].id);
+        const finalProspects = (updated && updated.length > 0) ? updated : newList;
+        setProspects(finalProspects);
+        if (finalProspects.length > 0) {
+          setActiveContactId(finalProspects[0].id);
         }
         showTemporarySuccess(`Importation réussie : ${parsed.length} contacts importés depuis le fichier !`);
       } catch (err) {
@@ -1344,11 +1381,11 @@ const AdminProspects = () => {
                           </td>
 
                           <td className="p-4 text-gray-600 text-xs">
-                            {reg.customFields?.['Classe'] || reg.customFields?.['classe'] || '-'}
+                            {getCustomFieldValue(reg.customFields, 'Classe')}
                           </td>
 
                           <td className="p-4 text-gray-600 text-xs">
-                            {reg.customFields?.['École de provenance'] || reg.customFields?.['ecole de provenance'] || reg.customFields?.['école de provenance'] || '-'}
+                            {getCustomFieldValue(reg.customFields, 'École de provenance')}
                           </td>
 
                           <td className="p-4 text-gray-600 text-xs font-mono">
@@ -1360,7 +1397,7 @@ const AdminProspects = () => {
                           </td>
 
                           <td className="p-4 text-gray-600 text-xs">
-                            {reg.customFields?.['Filière souhaitée'] || reg.customFields?.['filière souhaitée'] || reg.customFields?.['filiere souhaitee'] || '-'}
+                            {getCustomFieldValue(reg.customFields, 'Filière souhaitée')}
                           </td>
 
                           <td className="p-4">

@@ -5,11 +5,13 @@ import { Club, Atelier, Event, Member, Mentor, Student, CinemaSale, ClubRegistra
 
 export const CINEMA_CLUB_ID = 'atelier-cinema-default';
 
-const sanitizeData = (data: any) => {
+const sanitizeData = (data: any): any => {
+  if (data === null || typeof data !== 'object') return data;
+  if (Array.isArray(data)) return data.map(sanitizeData);
   const clean: any = {};
   Object.keys(data).forEach(key => {
     if (data[key] !== undefined) {
-      clean[key] = data[key];
+      clean[key] = sanitizeData(data[key]);
     }
   });
   return clean;
@@ -447,7 +449,7 @@ export const dataService = {
   },
 
   // --- PROSPECTS CAMPAIGNS ---
-  fetchProspects: () => getAllForUser<ProspectContact>('prospect_contacts', []),
+  fetchProspects: () => getAll<ProspectContact>('prospect_contacts', []),
   addProspect: async (p: Omit<ProspectContact, 'id'>) => {
     const userId = auth.currentUser?.uid;
     const data = sanitizeData(userId ? { ...p, userId } : p);
@@ -460,13 +462,14 @@ export const dataService = {
       }
     }
     const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
-    saveToStorage('prospect_contacts', [...curr, { ...data, id: 'local_' + Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5) }]);
-    return dataService.fetchProspects();
+    const updated = [...curr, { ...data, id: 'local_' + Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5) }];
+    saveToStorage('prospect_contacts', updated);
+    return updated;
   },
   updateProspect: async (p: ProspectContact) => {
     const userId = auth.currentUser?.uid;
     const { id, ...data } = sanitizeData(userId ? { ...p, userId } : p);
-    if (db) {
+    if (db && !id.startsWith('local_')) {
       try {
         await updateDoc(doc(db, 'prospect_contacts', id), data);
         return dataService.fetchProspects();
@@ -475,11 +478,12 @@ export const dataService = {
       }
     }
     const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
-    saveToStorage('prospect_contacts', curr.map(x => x.id === id ? { ...data, id } : x));
-    return dataService.fetchProspects();
+    const updated = curr.map(x => x.id === id ? { ...data, id } : x);
+    saveToStorage('prospect_contacts', updated);
+    return updated;
   },
   deleteProspect: async (id: string) => {
-    if (db) {
+    if (db && !id.startsWith('local_')) {
       try {
         await deleteDoc(doc(db, 'prospect_contacts', id));
         return dataService.fetchProspects();
@@ -488,33 +492,43 @@ export const dataService = {
       }
     }
     const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
-    saveToStorage('prospect_contacts', curr.filter(x => x.id !== id));
-    return dataService.fetchProspects();
+    const updated = curr.filter(x => x.id !== id);
+    saveToStorage('prospect_contacts', updated);
+    return updated;
   },
   saveProspectsBulk: async (contacts: ProspectContact[]) => {
     const userId = auth.currentUser?.uid;
+    // Always sync with localStorage immediately so state is never lost
+    saveToStorage('prospect_contacts', contacts);
+
     if (db) {
       try {
-        // Only delete the current user's old records
         const q = userId ? query(collection(db, 'prospect_contacts'), where('userId', '==', userId)) : query(collection(db, 'prospect_contacts'));
         const snapshot = await getDocs(q);
-        const deleteBatch = writeBatch(db);
-        snapshot.forEach(d => deleteBatch.delete(d.ref));
-        await deleteBatch.commit();
+        const docsToDelete = snapshot.docs;
 
-        const addBatch = writeBatch(db);
-        contacts.forEach(c => {
-          const docRef = doc(collection(db, 'prospect_contacts'));
-          const { id, ...data } = c;
-          addBatch.set(docRef, sanitizeData(userId ? { ...data, userId } : data));
-        });
-        await addBatch.commit();
+        // Delete in safe chunks <= 400 (Firestore limit is 500)
+        for (let i = 0; i < docsToDelete.length; i += 400) {
+          const deleteBatch = writeBatch(db);
+          const chunk = docsToDelete.slice(i, i + 400);
+          chunk.forEach(d => deleteBatch.delete(d.ref));
+          await deleteBatch.commit();
+        }
+
+        // Insert in safe chunks <= 400
+        for (let i = 0; i < contacts.length; i += 400) {
+          const addBatch = writeBatch(db);
+          const chunk = contacts.slice(i, i + 400);
+          chunk.forEach(c => {
+            const docRef = doc(collection(db, 'prospect_contacts'));
+            const { id, ...data } = c;
+            addBatch.set(docRef, sanitizeData(userId ? { ...data, userId } : data));
+          });
+          await addBatch.commit();
+        }
       } catch (error) {
-        console.warn("Error saving prospects bulk in Firestore, falling back to local:", error);
-        if (!userId) saveToStorage('prospect_contacts', contacts);
+        console.warn("Error saving prospects bulk in Firestore, falling back to local storage:", error);
       }
-    } else {
-      if (!userId) saveToStorage('prospect_contacts', contacts);
     }
     return dataService.fetchProspects();
   },
