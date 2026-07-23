@@ -26,7 +26,11 @@ import {
   ChevronRight, 
   AlertCircle,
   TrendingUp,
-  UserCheck
+  UserCheck,
+  GraduationCap,
+  Building2,
+  Award,
+  FileText
 } from 'lucide-react';
 import AdminLayout from '../../components/AdminLayout';
 
@@ -36,15 +40,19 @@ const AdminProspects = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [schoolFilter, setSchoolFilter] = useState<'all' | 'descartes' | 'other'>('all');
   const [templateBody, setTemplateBody] = useState('');
   const [parentTemplateBody, setParentTemplateBody] = useState('');
   const [relanceJeuneTemplateBody, setRelanceJeuneTemplateBody] = useState('');
   const [relanceParentTemplateBody, setRelanceParentTemplateBody] = useState('');
-  const [activeTemplateTab, setActiveTemplateTab] = useState<'jeune' | 'parent' | 'relance_jeune' | 'relance_parent'>('jeune');
+  const [descartesJeuneTemplateBody, setDescartesJeuneTemplateBody] = useState('');
+  const [descartesParentTemplateBody, setDescartesParentTemplateBody] = useState('');
+  const [activeTemplateTab, setActiveTemplateTab] = useState<'jeune' | 'parent' | 'relance_jeune' | 'relance_parent' | 'descartes_jeune' | 'descartes_parent'>('jeune');
   const [isTemplateSaving, setIsTemplateSaving] = useState(false);
   const [isBulkImporting, setIsBulkImporting] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [isPasteOpen, setIsPasteOpen] = useState(false);
+  const [importMode, setImportMode] = useState<'standard' | 'descartes_pdf'>('standard');
   const [importError, setImportError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -71,8 +79,17 @@ const AdminProspects = () => {
   const [currentCampaignIndex, setCurrentCampaignIndex] = useState(0);
   const [autoNextMode, setAutoNextMode] = useState(true);
 
+  // Helper to check if a prospect is from Lycée International Descartes
+  const isDescartesProspect = (p: ProspectContact | null): boolean => {
+    if (!p) return false;
+    const ecoleVal = getCustomFieldValue(p.customFields, 'École de provenance');
+    if (ecoleVal && ecoleVal.toLowerCase().includes('descartes')) return true;
+    const allText = `${p.notes || ''} ${p.firstName || ''} ${p.lastName || ''} ${JSON.stringify(p.customFields || {})}`.toLowerCase();
+    return allText.includes('descartes');
+  };
+
   // Campaign auto-advance handler
-  const handleCampaignSend = async (contact: ProspectContact, target: 'jeune' | 'parent' | 'relance_jeune' | 'relance_parent' = 'jeune') => {
+  const handleCampaignSend = async (contact: ProspectContact, target: 'jeune' | 'parent' | 'relance_jeune' | 'relance_parent' | 'descartes_jeune' | 'descartes_parent' = 'jeune') => {
     sendWhatsAppMessage(contact, target);
     if (autoNextMode) {
       setTimeout(() => {
@@ -97,10 +114,14 @@ const AdminProspects = () => {
       const tParent = await dataService.fetchCampaignTemplate('parent');
       const tRelJeune = await dataService.fetchCampaignTemplate('relance_jeune');
       const tRelParent = await dataService.fetchCampaignTemplate('relance_parent');
+      const tDescJeune = await dataService.fetchCampaignTemplate('descartes_jeune');
+      const tDescParent = await dataService.fetchCampaignTemplate('descartes_parent');
       setTemplateBody(tJeune);
       setParentTemplateBody(tParent);
       setRelanceJeuneTemplateBody(tRelJeune);
       setRelanceParentTemplateBody(tRelParent);
+      setDescartesJeuneTemplateBody(tDescJeune);
+      setDescartesParentTemplateBody(tDescParent);
     } catch (e) {
       console.error("Error loading prospects data:", e);
     } finally {
@@ -152,6 +173,10 @@ const AdminProspects = () => {
         await dataService.saveCampaignTemplate(relanceJeuneTemplateBody, 'relance_jeune');
       } else if (activeTemplateTab === 'relance_parent') {
         await dataService.saveCampaignTemplate(relanceParentTemplateBody, 'relance_parent');
+      } else if (activeTemplateTab === 'descartes_jeune') {
+        await dataService.saveCampaignTemplate(descartesJeuneTemplateBody, 'descartes_jeune');
+      } else if (activeTemplateTab === 'descartes_parent') {
+        await dataService.saveCampaignTemplate(descartesParentTemplateBody, 'descartes_parent');
       }
       showTemporarySuccess(`Modèle ${activeTemplateTab} enregistré avec succès !`);
     } catch (e) {
@@ -185,6 +210,10 @@ const AdminProspects = () => {
       setRelanceJeuneTemplateBody(newText);
     } else if (activeTemplateTab === 'relance_parent') {
       setRelanceParentTemplateBody(newText);
+    } else if (activeTemplateTab === 'descartes_jeune') {
+      setDescartesJeuneTemplateBody(newText);
+    } else if (activeTemplateTab === 'descartes_parent') {
+      setDescartesParentTemplateBody(newText);
     }
     
     setTimeout(() => {
@@ -374,6 +403,129 @@ const AdminProspects = () => {
     return parsed;
   };
 
+  // Dedicated parser for Lycée International Descartes PDF text
+  // Strictly isolates Nom, Prénom, and Phone Number for each line, discarding all other info.
+  const parseDescartesPdfText = (text: string): Omit<ProspectContact, 'id'>[] => {
+    const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (rawLines.length === 0) return [];
+
+    const parsed: Omit<ProspectContact, 'id'>[] = [];
+
+    // Helper to find phone number inside string
+    const extractPhone = (str: string): { phone: string; remaining: string } => {
+      const phoneRegex = /(?:\+?225|00225)?\s*(?:[0-9][\s.-]?){8,12}/g;
+      const matches = str.match(phoneRegex);
+      if (matches && matches.length > 0) {
+        for (const m of matches) {
+          const digits = m.replace(/[^0-9+]/g, '');
+          if (digits.length >= 8 && digits.length <= 15) {
+            const remaining = str.replace(m, ' ').trim();
+            return { phone: digits, remaining };
+          }
+        }
+      }
+      return { phone: '', remaining: str };
+    };
+
+    // Helper to parse Name & Surname from text
+    const extractNameParts = (str: string): { firstName: string; lastName: string } => {
+      let clean = str
+        .replace(/page\s*\d+/gi, '')
+        .replace(/lyc[eé]e\s+international\s+descartes/gi, '')
+        .replace(/lyc[eé]e\s+descartes/gi, '')
+        .replace(/descartes/gi, '')
+        .replace(/orientation|carrefour|bac|aefe|élève|etudiant|étudiant|candidat|terminale|premiere|seconde|filiere|classe|groupe|série/gi, '')
+        .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '')
+        .replace(/\b\d{1,5}\b/g, '')
+        .replace(/[,;|/]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!clean) return { firstName: '', lastName: '' };
+
+      const words = clean.split(' ').filter(w => w.length > 0);
+      if (words.length === 0) return { firstName: '', lastName: '' };
+      if (words.length === 1) return { firstName: words[0], lastName: '' };
+
+      // In French lists, ALL-CAPS words are LAST NAMES (Nom)
+      const uppercaseWords: string[] = [];
+      const normalWords: string[] = [];
+
+      words.forEach(w => {
+        const letters = w.replace(/[^a-zA-ZàâäéèêëîïôöùûüçÀÂÄÉÈÊËÎÏÔÖÙÛÜÇ-]/g, '');
+        if (letters.length >= 2 && letters === letters.toUpperCase()) {
+          uppercaseWords.push(w);
+        } else {
+          normalWords.push(w);
+        }
+      });
+
+      if (uppercaseWords.length > 0) {
+        const lastName = uppercaseWords.join(' ');
+        const firstName = normalWords.length > 0 ? normalWords.join(' ') : words.filter(w => !uppercaseWords.includes(w)).join(' ');
+        return {
+          firstName: firstName || 'Prospect',
+          lastName: lastName || ''
+        };
+      }
+
+      return {
+        firstName: words[0],
+        lastName: words.slice(1).join(' ')
+      };
+    };
+
+    for (const line of rawLines) {
+      const lower = line.toLowerCase();
+      if (
+        (lower.includes('nom') && lower.includes('prenom')) ||
+        lower.includes('liste des') ||
+        lower.includes('carrefour orientation') ||
+        lower.startsWith('page ')
+      ) {
+        continue;
+      }
+
+      let cols = [line];
+      if (line.includes('\t')) cols = line.split('\t');
+      else if (line.includes(';')) cols = line.split(';');
+
+      let phone = '';
+      let textCandidates: string[] = [];
+
+      if (cols.length > 1) {
+        cols.forEach(c => {
+          const trimmed = c.trim();
+          const { phone: p, remaining } = extractPhone(trimmed);
+          if (p && !phone) phone = p;
+          if (remaining) textCandidates.push(remaining);
+        });
+      } else {
+        const { phone: p, remaining } = extractPhone(line);
+        phone = p;
+        if (remaining) textCandidates.push(remaining);
+      }
+
+      const combinedText = textCandidates.join(' ');
+      const { firstName, lastName } = extractNameParts(combinedText);
+
+      if ((firstName && firstName !== 'Prospect') || lastName || phone) {
+        parsed.push({
+          firstName: firstName || 'Prospect',
+          lastName: lastName || '',
+          phone: phone || '',
+          status: 'to_do',
+          notes: 'Import PDF Lycée International Descartes',
+          customFields: {
+            'École de provenance': 'Lycée International Descartes'
+          }
+        });
+      }
+    }
+
+    return parsed;
+  };
+
   const handlePasteImport = async () => {
     setImportError('');
     if (!pasteText.trim()) {
@@ -382,7 +534,10 @@ const AdminProspects = () => {
     }
 
     try {
-      const parsed = parseImportedText(pasteText);
+      const parsed = importMode === 'descartes_pdf' 
+        ? parseDescartesPdfText(pasteText) 
+        : parseImportedText(pasteText);
+
       if (parsed.length === 0) {
         setImportError("Aucun contact valide détecté. Vérifiez le format.");
         return;
@@ -431,7 +586,10 @@ const AdminProspects = () => {
       if (!text) return;
 
       try {
-        const parsed = parseImportedText(text);
+        const parsed = importMode === 'descartes_pdf' 
+          ? parseDescartesPdfText(text) 
+          : parseImportedText(text);
+
         if (parsed.length === 0) {
           setImportError("Aucun contact valide détecté dans le fichier.");
           return;
@@ -511,12 +669,17 @@ const AdminProspects = () => {
 
   const openAddModal = () => {
     setEditingProspect(null);
+    const initialCustomFields: Record<string, string> = {};
+    if (schoolFilter === 'descartes') {
+      initialCustomFields['École de provenance'] = 'Lycée International Descartes';
+    }
     setFormProspect({
       firstName: '',
       lastName: '',
       phone: '',
       status: 'to_do',
-      notes: ''
+      notes: '',
+      customFields: initialCustomFields
     });
     setIsEditModalOpen(true);
   };
@@ -562,15 +725,17 @@ const AdminProspects = () => {
   };
 
   // Launch direct message and update status
-  const sendWhatsAppMessage = async (contact: ProspectContact, target: 'jeune' | 'parent' | 'relance_jeune' | 'relance_parent' = 'jeune') => {
+  const sendWhatsAppMessage = async (contact: ProspectContact, target: 'jeune' | 'parent' | 'relance_jeune' | 'relance_parent' | 'descartes_jeune' | 'descartes_parent' = 'jeune') => {
     let template = templateBody;
     if (target === 'parent') template = parentTemplateBody;
     if (target === 'relance_jeune') template = relanceJeuneTemplateBody;
     if (target === 'relance_parent') template = relanceParentTemplateBody;
+    if (target === 'descartes_jeune') template = descartesJeuneTemplateBody;
+    if (target === 'descartes_parent') template = descartesParentTemplateBody;
 
     const message = personalizeMessage(template, contact);
     const encodedMsg = encodeURIComponent(message);
-    const isParentTarget = target === 'parent' || target === 'relance_parent';
+    const isParentTarget = target === 'parent' || target === 'relance_parent' || target === 'descartes_parent';
     const phoneToUse = isParentTarget ? (contact.parentPhone || contact.phone) : contact.phone;
     const formattedPhone = formatPhoneForWhatsApp(phoneToUse);
     const url = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodedMsg}`;
@@ -606,6 +771,8 @@ const AdminProspects = () => {
     if (activeTemplateTab === 'parent') template = parentTemplateBody;
     if (activeTemplateTab === 'relance_jeune') template = relanceJeuneTemplateBody;
     if (activeTemplateTab === 'relance_parent') template = relanceParentTemplateBody;
+    if (activeTemplateTab === 'descartes_jeune') template = descartesJeuneTemplateBody;
+    if (activeTemplateTab === 'descartes_parent') template = descartesParentTemplateBody;
     return personalizeMessage(template, contact);
   };
 
@@ -647,10 +814,18 @@ const AdminProspects = () => {
   
   const currentCampaignContact = campaignList[currentCampaignIndex] || null;
 
-  const startCampaignFlow = () => {
-    const list = prospects.filter(p => p.status === 'to_do' || p.status === 'in_progress');
+  const startCampaignFlow = (descartesOnly = false) => {
+    const isDescartesFilterActive = descartesOnly || schoolFilter === 'descartes';
+    const sourceProspects = isDescartesFilterActive 
+      ? prospects.filter(p => isDescartesProspect(p))
+      : (schoolFilter === 'other' ? prospects.filter(p => !isDescartesProspect(p)) : prospects);
+
+    const list = sourceProspects.filter(p => p.status === 'to_do' || p.status === 'in_progress');
     if (list.length === 0) {
-      alert("Aucun contact à relancer avec le statut 'À faire' ou 'En cours' !");
+      alert(isDescartesFilterActive 
+        ? "Aucun contact de Lycée Descartes à relancer avec le statut 'À faire' ou 'En cours' !" 
+        : "Aucun contact à relancer avec le statut 'À faire' ou 'En cours' !"
+      );
       return;
     }
     setCampaignList(list);
@@ -728,13 +903,33 @@ const AdminProspects = () => {
         p.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.phone.includes(searchTerm) ||
-        (p.notes || '').toLowerCase().includes(searchTerm.toLowerCase());
+        (p.notes || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        JSON.stringify(p.customFields || {}).toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchStatus = statusFilter === 'all' || p.status === statusFilter;
+
+      let matchSchool = true;
+      if (schoolFilter === 'descartes') {
+        matchSchool = isDescartesProspect(p);
+      } else if (schoolFilter === 'other') {
+        matchSchool = !isDescartesProspect(p);
+      }
       
-      return matchSearch && matchStatus;
+      return matchSearch && matchStatus && matchSchool;
     });
-  }, [prospects, searchTerm, statusFilter]);
+  }, [prospects, searchTerm, statusFilter, schoolFilter]);
+
+  // Descartes specific statistics
+  const descartesStats = useMemo(() => {
+    const list = prospects.filter(p => isDescartesProspect(p));
+    const total = list.length;
+    const toDo = list.filter(p => p.status === 'to_do').length;
+    const inProgress = list.filter(p => p.status === 'in_progress').length;
+    const sent = list.filter(p => p.status === 'sent').length;
+    const ignored = list.filter(p => p.status === 'ignored').length;
+    const progressPercent = total > 0 ? Math.round((sent / total) * 100) : 0;
+    return { total, toDo, inProgress, sent, ignored, progressPercent };
+  }, [prospects]);
 
   // Collect all unique custom fields from prospects to show in template builder
   const availableCustomFields = useMemo(() => {
@@ -1001,30 +1196,42 @@ const AdminProspects = () => {
               </div>
 
               {/* Template Tabs */}
-              <div className="flex flex-wrap gap-2 border-b border-gray-200 mb-4 pb-2">
+              <div className="flex flex-wrap gap-1.5 border-b border-gray-200 mb-4 pb-2">
                 <button
                   onClick={() => setActiveTemplateTab('jeune')}
-                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'jeune' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'jeune' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
                 >
                   Message Jeune
                 </button>
                 <button
                   onClick={() => setActiveTemplateTab('parent')}
-                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'parent' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'parent' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
                 >
                   Message Parent
                 </button>
                 <button
                   onClick={() => setActiveTemplateTab('relance_jeune')}
-                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'relance_jeune' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'relance_jeune' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
                 >
                   Relance Jeune
                 </button>
                 <button
                   onClick={() => setActiveTemplateTab('relance_parent')}
-                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'relance_parent' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'relance_parent' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
                 >
                   Relance Parent
+                </button>
+                <button
+                  onClick={() => setActiveTemplateTab('descartes_jeune')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition-colors flex items-center gap-1 ${activeTemplateTab === 'descartes_jeune' ? 'bg-indigo-700 text-white shadow-sm' : 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200'}`}
+                >
+                  <GraduationCap size={13} className="text-amber-400" /> Descartes Jeune
+                </button>
+                <button
+                  onClick={() => setActiveTemplateTab('descartes_parent')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition-colors flex items-center gap-1 ${activeTemplateTab === 'descartes_parent' ? 'bg-indigo-700 text-white shadow-sm' : 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200'}`}
+                >
+                  <GraduationCap size={13} className="text-amber-400" /> Descartes Parent
                 </button>
               </div>
 
@@ -1069,17 +1276,46 @@ const AdminProspects = () => {
                 <textarea
                   id="template-textarea"
                   rows={7}
-                  value={activeTemplateTab === 'jeune' ? templateBody : activeTemplateTab === 'parent' ? parentTemplateBody : activeTemplateTab === 'relance_jeune' ? relanceJeuneTemplateBody : relanceParentTemplateBody}
+                  value={
+                    activeTemplateTab === 'jeune' ? templateBody : 
+                    activeTemplateTab === 'parent' ? parentTemplateBody : 
+                    activeTemplateTab === 'relance_jeune' ? relanceJeuneTemplateBody : 
+                    activeTemplateTab === 'relance_parent' ? relanceParentTemplateBody : 
+                    activeTemplateTab === 'descartes_jeune' ? descartesJeuneTemplateBody : 
+                    descartesParentTemplateBody
+                  }
                   onChange={(e) => {
                     const val = e.target.value;
                     if (activeTemplateTab === 'jeune') setTemplateBody(val);
                     else if (activeTemplateTab === 'parent') setParentTemplateBody(val);
                     else if (activeTemplateTab === 'relance_jeune') setRelanceJeuneTemplateBody(val);
                     else if (activeTemplateTab === 'relance_parent') setRelanceParentTemplateBody(val);
+                    else if (activeTemplateTab === 'descartes_jeune') setDescartesJeuneTemplateBody(val);
+                    else if (activeTemplateTab === 'descartes_parent') setDescartesParentTemplateBody(val);
                   }}
-                  placeholder={`Rédigez ici votre modèle de message pour le ${activeTemplateTab}...`}
+                  placeholder={`Rédigez ici votre modèle de message pour ${activeTemplateTab}...`}
                   className="w-full p-3.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none font-sans leading-relaxed resize-none bg-gray-50 focus:bg-white transition-all"
                 />
+              </div>
+
+              <div className="mt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                <button
+                  onClick={() => {
+                    if (activeTemplateTab === 'descartes_parent') {
+                      setDescartesParentTemplateBody("Bonjour M./Mme {nom},\n\nJ'espère que vous allez bien. Je suis Méhdi Traoré, de l'Institut Français du Numérique (IFRAN).\n\nSuite aux carrefours d'orientation au Lycée International Descartes 🎓 concernant l'avenir académique de votre enfant {prenom}, je reviens vers vous.\n\nL'IFRAN propose des cursus d'excellence dans le numérique très prisés des élèves du réseau AEFE / Descartes.\n\nAvez-vous déjà arrêté votre choix pour l'orientation de {prenom} ? Nous serions ravis de vous transmettre notre documentation détaillée. 😊");
+                    } else {
+                      setDescartesJeuneTemplateBody("Bonjour {prenom} ! 👋\n\nJ'espère que tu vas bien. Je suis Méhdi Traoré, de l'Institut Français du Numérique (l'IFRAN).\n\nEn tant qu'élève au Lycée International Descartes 🎓, tu prépares ton orientation Post-Bac. Nos Bachelors et formations supérieures (Génie Logiciel, Design, Data & IA) sont particulièrement adaptés au rythme du Bac Français et au réseau AEFE.\n\nAs-tu déjà choisi ton université pour l'an prochain, ou souhaites-tu recevoir notre brochure spéciale Descartes & échanger avec nous ? 😊");
+                      if (activeTemplateTab !== 'descartes_jeune') {
+                        setActiveTemplateTab('descartes_jeune');
+                      }
+                    }
+                    showTemporarySuccess("Modèle spécial Lycée Descartes chargé !");
+                  }}
+                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <Sparkles size={14} className="text-amber-600 shrink-0" />
+                  Charger le modèle spécial Lycée Descartes
+                </button>
               </div>
 
               <div className="mt-2 bg-amber-50 border border-amber-200 p-3 rounded-lg text-amber-800 text-[11px] flex gap-2">
@@ -1171,6 +1407,95 @@ const AdminProspects = () => {
           {/* Right Panel: Prospects List & Campaign Controls (7 Cols) */}
           <div className="lg:col-span-7 space-y-6">
             
+            {/* School Selector Tabs (Filtre Établissements) */}
+            <div className="bg-white p-2.5 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setSchoolFilter('all')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                  schoolFilter === 'all'
+                    ? 'bg-bde-navy text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <Building2 size={15} />
+                Tous les établissements ({stats.total})
+              </button>
+
+              <button
+                onClick={() => setSchoolFilter('descartes')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                  schoolFilter === 'descartes'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-md ring-2 ring-indigo-300'
+                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
+                }`}
+              >
+                <GraduationCap size={16} className={schoolFilter === 'descartes' ? 'text-yellow-300' : 'text-indigo-600'} />
+                Lycée Int. Descartes
+                <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+                  schoolFilter === 'descartes' ? 'bg-white text-indigo-900' : 'bg-indigo-200 text-indigo-800'
+                }`}>
+                  {descartesStats.total}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setSchoolFilter('other')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                  schoolFilter === 'other'
+                    ? 'bg-bde-navy text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                Autres ({stats.total - descartesStats.total})
+              </button>
+            </div>
+
+            {/* Dedicated Descartes Spécial Banner */}
+            {schoolFilter === 'descartes' && (
+              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white p-5 rounded-2xl border border-indigo-500/40 shadow-lg relative overflow-hidden animate-fade-in">
+                <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
+                  <GraduationCap size={130} className="text-indigo-200" />
+                </div>
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2.5 py-0.5 bg-yellow-400/20 text-yellow-300 text-[10px] font-extrabold uppercase tracking-wider rounded-full border border-yellow-400/30 flex items-center gap-1">
+                        <Award size={12} /> Section Spéciale Lycée Descartes
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      Prospects & Relances Lycée International Descartes
+                    </h3>
+                    <p className="text-xs text-indigo-200/90 mt-1">
+                      {descartesStats.total} prospects • {descartesStats.toDo + descartesStats.inProgress} à relancer • {descartesStats.sent} messages envoyés ({descartesStats.progressPercent}%)
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 shrink-0">
+                    <button
+                      onClick={() => {
+                        setImportMode('descartes_pdf');
+                        setIsPasteOpen(true);
+                      }}
+                      className="px-3.5 py-2 bg-indigo-900/80 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl shadow-sm border border-indigo-500/50 flex items-center gap-1.5 transition-all"
+                    >
+                      <FileText size={13} className="text-yellow-300" />
+                      Importer PDF Descartes
+                    </button>
+
+                    <button
+                      onClick={() => startCampaignFlow(true)}
+                      disabled={descartesStats.toDo + descartesStats.inProgress === 0}
+                      className="px-3.5 py-2 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-slate-950 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all disabled:opacity-50"
+                    >
+                      <Play size={13} fill="currentColor" />
+                      Lancer Relances Descartes ({descartesStats.toDo + descartesStats.inProgress})
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Campaign Control Toolbar & Contacts Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               
@@ -1371,9 +1696,16 @@ const AdminProspects = () => {
 
                           <td className="p-4">
                             <div>
-                              <p className="font-bold text-gray-900 text-sm">
-                                {reg.firstName} {reg.lastName}
-                              </p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="font-bold text-gray-900 text-sm">
+                                  {reg.firstName} {reg.lastName}
+                                </p>
+                                {isDescartesProspect(reg) && (
+                                  <span className="px-1.5 py-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[9px] font-extrabold rounded-md shadow-2xs flex items-center gap-0.5 shrink-0" title="Prospect du Lycée International Descartes">
+                                    <GraduationCap size={10} className="text-yellow-300" /> Descartes
+                                  </span>
+                                )}
+                              </div>
                               {reg.notes && (
                                 <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{reg.notes}</p>
                               )}
@@ -1406,6 +1738,18 @@ const AdminProspects = () => {
 
                           <td className="p-4 text-center">
                             <div className="flex gap-1 justify-center flex-wrap" onClick={(e) => e.stopPropagation()}>
+                              {isDescartesProspect(reg) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    sendWhatsAppMessage(reg, 'descartes_jeune');
+                                  }}
+                                  className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors inline-flex shadow-xs"
+                                  title="Contacter avec le modèle Spécial Lycée Descartes"
+                                >
+                                  <GraduationCap size={14} className="text-yellow-300" />
+                                </button>
+                              )}
                               {reg.status === 'to_do' ? (
                                 <>
                                   <button
@@ -1513,17 +1857,55 @@ const AdminProspects = () => {
 
       </div>
 
-      {/* Paste Excel/Sheets Cells Modal Box */}
+      {/* Paste Excel/Sheets Cells / PDF Descartes Modal Box */}
       {isPasteOpen && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl">
-            <h2 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <Clipboard className="text-indigo-600" size={20} />
-              Coller des cellules Excel / Google Sheets
-            </h2>
-            <p className="text-xs text-gray-500 mb-4">
-              Copiez directement vos lignes/colonnes depuis Excel ou Google Sheets (Nom et prénom, Classe, École de provenance, Tél. jeune, Tél. parent, Filière souhaitée) et collez-les dans la zone ci-dessous. Les colonnes seront détectées automatiquement !
-            </p>
+            {/* Import Mode Tabs */}
+            <div className="flex border-b border-gray-200 mb-4 pb-1">
+              <button
+                type="button"
+                onClick={() => setImportMode('standard')}
+                className={`flex-1 py-2 text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
+                  importMode === 'standard'
+                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                <Clipboard size={14} />
+                Excel / Sheets Standard
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportMode('descartes_pdf')}
+                className={`flex-1 py-2 text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
+                  importMode === 'descartes_pdf'
+                    ? 'border-yellow-500 text-indigo-950 bg-amber-50/80 rounded-t-lg'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                <GraduationCap size={15} className="text-amber-500" />
+                PDF Lycée Descartes (3 éléments)
+              </button>
+            </div>
+
+            {importMode === 'descartes_pdf' ? (
+              <div className="mb-3">
+                <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-900 text-xs font-medium space-y-1">
+                  <div className="font-bold text-amber-950 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-amber-600" />
+                    Extraction Spéciale Document PDF Lycée Descartes
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-800">
+                    Seuls le <strong>Nom</strong>, le <strong>Prénom</strong> et le <strong>Numéro de téléphone</strong> seront identifiés et conservés pour chaque ligne. Toutes les autres informations du PDF seront automatiquement ignorées.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500 mb-4">
+                Copiez directement vos lignes/colonnes depuis Excel ou Google Sheets (Nom et prénom, Classe, École de provenance, Tél. jeune, Tél. parent, Filière souhaitée) et collez-les dans la zone ci-dessous.
+              </p>
+            )}
 
             {importError && (
               <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg mb-4 text-xs font-semibold flex items-center gap-1.5">
@@ -1537,8 +1919,12 @@ const AdminProspects = () => {
                 rows={8}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
-                placeholder="Exemple de format collé :&#10;Jean Dupont	Terminale D	Lycée Classique	0102030405	0505050505	Informatique"
-                className="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-gray-50 focus:bg-white resize-none"
+                placeholder={
+                  importMode === 'descartes_pdf'
+                    ? "Collez ici le texte copié depuis le document PDF du Lycée International Descartes...\nExemple :\nTRAORE Méhdi  0708091011  m.traore@descartes.ci\nDIALLO Fatou  0501020304  Terminal A  Inscrite"
+                    : "Exemple de format collé :\nJean Dupont\tTerminale D\tLycée Classique\t0102030405\t0505050505\tInformatique"
+                }
+                className="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-gray-50 focus:bg-white resize-none leading-relaxed"
               />
 
               <div className="flex gap-3">
@@ -1556,9 +1942,13 @@ const AdminProspects = () => {
                 <button 
                   type="button"
                   onClick={handlePasteImport}
-                  className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                  className={`flex-1 px-4 py-2.5 text-white rounded-xl text-xs font-bold transition-all shadow-sm ${
+                    importMode === 'descartes_pdf'
+                      ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-slate-950'
+                      : 'bg-indigo-600 hover:bg-indigo-700'
+                  }`}
                 >
-                  Analyser et Importer
+                  {importMode === 'descartes_pdf' ? 'Extraire Nom, Prénom & Tél' : 'Analyser et Importer'}
                 </button>
               </div>
             </div>

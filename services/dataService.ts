@@ -550,6 +550,10 @@ export const dataService = {
       defaultTemplate = "Bonjour {prenom},\n\nJe reviens vers vous suite à notre précédent échange. Avez-vous eu l'occasion de réfléchir à votre orientation ? N'hésitez pas si vous avez des questions sur l'IFRAN !";
     } else if (templateId === 'relance_parent') {
       defaultTemplate = "Bonjour M./Mme {nom},\n\nJe reviens vers vous suite à notre précédent échange concernant l'orientation de {prenom}. Avez-vous pu en discuter ? N'hésitez pas si vous avez des questions sur l'IFRAN !";
+    } else if (templateId === 'descartes_jeune') {
+      defaultTemplate = "Bonjour {prenom} ! 👋\n\nJ'espère que tu vas bien. Je suis Méhdi Traoré, de l'Institut Français du Numérique (l'IFRAN).\n\nEn tant qu'élève au Lycée International Descartes 🎓, tu prépares ton orientation Post-Bac. Nos Bachelors et formations supérieures (Génie Logiciel, Design, Data & IA) sont particulièrement adaptés au rythme du Bac Français et au réseau AEFE.\n\nAs-tu déjà choisi ton université pour l'an prochain, ou souhaites-tu recevoir notre brochure spéciale Descartes & échanger avec nous ? 😊";
+    } else if (templateId === 'descartes_parent') {
+      defaultTemplate = "Bonjour M./Mme {nom},\n\nJ'espère que vous allez bien. Je suis Méhdi Traoré, de l'Institut Français du Numérique (IFRAN).\n\nSuite aux carrefours d'orientation au Lycée International Descartes 🎓 concernant l'avenir académique de votre enfant {prenom}, je reviens vers vous.\n\nL'IFRAN propose des cursus d'excellence dans le numérique très prisés des élèves du réseau AEFE / Descartes.\n\nAvez-vous déjà arrêté votre choix pour l'orientation de {prenom} ? Nous serions ravis de vous transmettre notre documentation détaillée. 😊";
     } else {
       defaultTemplate = "Bonjour {prenom},\n\nj’espère que vous allez bien. Je suis Méhdi Traoré, de l’Institut Français du Numérique (l’IFRAN). Nous avons eu vos coordonnées lors d'un salon d’orientation / journée carrière. Je reviens vers vous pour savoir si vous avez déjà une université, ou si vous envisagez de venir dans notre école...😊";
     }
