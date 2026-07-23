@@ -529,9 +529,16 @@ export const dataService = {
         console.warn("Error fetching template from Firestore:", error);
       }
     }
-    const defaultTemplate = templateId === 'parent' 
-      ? "Bonjour M./Mme {nom},\n\nj'espère que vous allez bien. Je suis Méhdi Traoré, étudiant à l'Institut Français du Numérique (IFRAN). Nous avons eu vos coordonnées lors d'un salon d’orientation / journée carrière après avoir échangé avec votre enfant {prenom}. Je reviens vers vous concernant son orientation, pour savoir si vous avez déjà choisi une université pour sa filière, ou si vous envisagez notre école...😊"
-      : "Bonjour {prenom},\n\nj’espère que vous allez bien. Je suis Méhdi Traoré, de l’Institut Français du Numérique (l’IFRAN). Nous avons eu vos coordonnées lors d'un salon d’orientation / journée carrière. Je reviens vers vous pour savoir si vous avez déjà une université, ou si vous envisagez de venir dans notre école...😊";
+    let defaultTemplate = "";
+    if (templateId === 'parent') {
+      defaultTemplate = "Bonjour M./Mme {nom},\n\nj'espère que vous allez bien. Je suis Méhdi Traoré, étudiant à l'Institut Français du Numérique (IFRAN). Nous avons eu vos coordonnées lors d'un salon d’orientation / journée carrière après avoir échangé avec votre enfant {prenom}. Je reviens vers vous concernant son orientation, pour savoir si vous avez déjà choisi une université pour sa filière, ou si vous envisagez notre école...😊";
+    } else if (templateId === 'relance_jeune') {
+      defaultTemplate = "Bonjour {prenom},\n\nJe reviens vers vous suite à notre précédent échange. Avez-vous eu l'occasion de réfléchir à votre orientation ? N'hésitez pas si vous avez des questions sur l'IFRAN !";
+    } else if (templateId === 'relance_parent') {
+      defaultTemplate = "Bonjour M./Mme {nom},\n\nJe reviens vers vous suite à notre précédent échange concernant l'orientation de {prenom}. Avez-vous pu en discuter ? N'hésitez pas si vous avez des questions sur l'IFRAN !";
+    } else {
+      defaultTemplate = "Bonjour {prenom},\n\nj’espère que vous allez bien. Je suis Méhdi Traoré, de l’Institut Français du Numérique (l’IFRAN). Nous avons eu vos coordonnées lors d'un salon d’orientation / journée carrière. Je reviens vers vous pour savoir si vous avez déjà une université, ou si vous envisagez de venir dans notre école...😊";
+    }
     return getFromStorage<string>(`campaign_template_${templateId}`, defaultTemplate);
   },
   saveCampaignTemplate: async (body: string, templateId: string = 'default') => {

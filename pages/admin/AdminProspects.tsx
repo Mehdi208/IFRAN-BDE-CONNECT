@@ -38,7 +38,9 @@ const AdminProspects = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [templateBody, setTemplateBody] = useState('');
   const [parentTemplateBody, setParentTemplateBody] = useState('');
-  const [activeTemplateTab, setActiveTemplateTab] = useState<'jeune' | 'parent'>('jeune');
+  const [relanceJeuneTemplateBody, setRelanceJeuneTemplateBody] = useState('');
+  const [relanceParentTemplateBody, setRelanceParentTemplateBody] = useState('');
+  const [activeTemplateTab, setActiveTemplateTab] = useState<'jeune' | 'parent' | 'relance_jeune' | 'relance_parent'>('jeune');
   const [isTemplateSaving, setIsTemplateSaving] = useState(false);
   const [isBulkImporting, setIsBulkImporting] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -70,7 +72,7 @@ const AdminProspects = () => {
   const [autoNextMode, setAutoNextMode] = useState(true);
 
   // Campaign auto-advance handler
-  const handleCampaignSend = async (contact: ProspectContact, target: 'jeune' | 'parent' = 'jeune') => {
+  const handleCampaignSend = async (contact: ProspectContact, target: 'jeune' | 'parent' | 'relance_jeune' | 'relance_parent' = 'jeune') => {
     sendWhatsAppMessage(contact, target);
     if (autoNextMode) {
       setTimeout(() => {
@@ -93,8 +95,12 @@ const AdminProspects = () => {
 
       const tJeune = await dataService.fetchCampaignTemplate('jeune');
       const tParent = await dataService.fetchCampaignTemplate('parent');
+      const tRelJeune = await dataService.fetchCampaignTemplate('relance_jeune');
+      const tRelParent = await dataService.fetchCampaignTemplate('relance_parent');
       setTemplateBody(tJeune);
       setParentTemplateBody(tParent);
+      setRelanceJeuneTemplateBody(tRelJeune);
+      setRelanceParentTemplateBody(tRelParent);
     } catch (e) {
       console.error("Error loading prospects data:", e);
     } finally {
@@ -140,8 +146,12 @@ const AdminProspects = () => {
     try {
       if (activeTemplateTab === 'jeune') {
         await dataService.saveCampaignTemplate(templateBody, 'jeune');
-      } else {
+      } else if (activeTemplateTab === 'parent') {
         await dataService.saveCampaignTemplate(parentTemplateBody, 'parent');
+      } else if (activeTemplateTab === 'relance_jeune') {
+        await dataService.saveCampaignTemplate(relanceJeuneTemplateBody, 'relance_jeune');
+      } else if (activeTemplateTab === 'relance_parent') {
+        await dataService.saveCampaignTemplate(relanceParentTemplateBody, 'relance_parent');
       }
       showTemporarySuccess(`Modèle ${activeTemplateTab} enregistré avec succès !`);
     } catch (e) {
@@ -169,8 +179,12 @@ const AdminProspects = () => {
     
     if (activeTemplateTab === 'jeune') {
       setTemplateBody(newText);
-    } else {
+    } else if (activeTemplateTab === 'parent') {
       setParentTemplateBody(newText);
+    } else if (activeTemplateTab === 'relance_jeune') {
+      setRelanceJeuneTemplateBody(newText);
+    } else if (activeTemplateTab === 'relance_parent') {
+      setRelanceParentTemplateBody(newText);
     }
     
     setTimeout(() => {
@@ -511,11 +525,16 @@ const AdminProspects = () => {
   };
 
   // Launch direct message and update status
-  const sendWhatsAppMessage = async (contact: ProspectContact, target: 'jeune' | 'parent' = 'jeune') => {
-    const template = target === 'jeune' ? templateBody : parentTemplateBody;
+  const sendWhatsAppMessage = async (contact: ProspectContact, target: 'jeune' | 'parent' | 'relance_jeune' | 'relance_parent' = 'jeune') => {
+    let template = templateBody;
+    if (target === 'parent') template = parentTemplateBody;
+    if (target === 'relance_jeune') template = relanceJeuneTemplateBody;
+    if (target === 'relance_parent') template = relanceParentTemplateBody;
+
     const message = personalizeMessage(template, contact);
     const encodedMsg = encodeURIComponent(message);
-    const phoneToUse = target === 'jeune' ? contact.phone : (contact.parentPhone || contact.phone);
+    const isParentTarget = target === 'parent' || target === 'relance_parent';
+    const phoneToUse = isParentTarget ? (contact.parentPhone || contact.phone) : contact.phone;
     const formattedPhone = formatPhoneForWhatsApp(phoneToUse);
     const url = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodedMsg}`;
     
@@ -546,7 +565,10 @@ const AdminProspects = () => {
 
   const getPreviewMessage = (contact: ProspectContact | null) => {
     if (!contact) return '';
-    const template = activeTemplateTab === 'jeune' ? templateBody : parentTemplateBody;
+    let template = templateBody;
+    if (activeTemplateTab === 'parent') template = parentTemplateBody;
+    if (activeTemplateTab === 'relance_jeune') template = relanceJeuneTemplateBody;
+    if (activeTemplateTab === 'relance_parent') template = relanceParentTemplateBody;
     return personalizeMessage(template, contact);
   };
 
@@ -942,7 +964,7 @@ const AdminProspects = () => {
               </div>
 
               {/* Template Tabs */}
-              <div className="flex gap-2 border-b border-gray-200 mb-4 pb-2">
+              <div className="flex flex-wrap gap-2 border-b border-gray-200 mb-4 pb-2">
                 <button
                   onClick={() => setActiveTemplateTab('jeune')}
                   className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'jeune' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
@@ -954,6 +976,18 @@ const AdminProspects = () => {
                   className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'parent' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
                 >
                   Message Parent
+                </button>
+                <button
+                  onClick={() => setActiveTemplateTab('relance_jeune')}
+                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'relance_jeune' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
+                >
+                  Relance Jeune
+                </button>
+                <button
+                  onClick={() => setActiveTemplateTab('relance_parent')}
+                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'relance_parent' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
+                >
+                  Relance Parent
                 </button>
               </div>
 
@@ -998,8 +1032,14 @@ const AdminProspects = () => {
                 <textarea
                   id="template-textarea"
                   rows={7}
-                  value={activeTemplateTab === 'jeune' ? templateBody : parentTemplateBody}
-                  onChange={(e) => activeTemplateTab === 'jeune' ? setTemplateBody(e.target.value) : setParentTemplateBody(e.target.value)}
+                  value={activeTemplateTab === 'jeune' ? templateBody : activeTemplateTab === 'parent' ? parentTemplateBody : activeTemplateTab === 'relance_jeune' ? relanceJeuneTemplateBody : relanceParentTemplateBody}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (activeTemplateTab === 'jeune') setTemplateBody(val);
+                    else if (activeTemplateTab === 'parent') setParentTemplateBody(val);
+                    else if (activeTemplateTab === 'relance_jeune') setRelanceJeuneTemplateBody(val);
+                    else if (activeTemplateTab === 'relance_parent') setRelanceParentTemplateBody(val);
+                  }}
                   placeholder={`Rédigez ici votre modèle de message pour le ${activeTemplateTab}...`}
                   className="w-full p-3.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none font-sans leading-relaxed resize-none bg-gray-50 focus:bg-white transition-all"
                 />
@@ -1230,8 +1270,12 @@ const AdminProspects = () => {
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                       {isSelectionMode && <th className="p-4 w-10 text-center"></th>}
-                      <th className="p-4">Contact</th>
-                      <th className="p-4">Téléphone</th>
+                      <th className="p-4">Nom et Prénom</th>
+                      <th className="p-4">Classe</th>
+                      <th className="p-4">École de provenance</th>
+                      <th className="p-4">Tél. jeune</th>
+                      <th className="p-4">Tél. parent</th>
+                      <th className="p-4">Filière souhaitée</th>
                       <th className="p-4">Statut</th>
                       <th className="p-4 text-center">Relancer</th>
                       <th className="p-4 rounded-tr-lg">Actions</th>
@@ -1296,25 +1340,27 @@ const AdminProspects = () => {
                               {reg.notes && (
                                 <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{reg.notes}</p>
                               )}
-                              {reg.customFields && Object.keys(reg.customFields).length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {Object.entries(reg.customFields).slice(0, 3).map(([key, val]) => (
-                                    <span key={key} className="inline-block text-[9px] bg-indigo-50/80 text-indigo-700 px-1.5 py-0.5 rounded font-medium max-w-[120px] truncate border border-indigo-100" title={`${key}: ${val}`}>
-                                      {val}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           </td>
 
+                          <td className="p-4 text-gray-600 text-xs">
+                            {reg.customFields?.['Classe'] || reg.customFields?.['classe'] || '-'}
+                          </td>
+
+                          <td className="p-4 text-gray-600 text-xs">
+                            {reg.customFields?.['École de provenance'] || reg.customFields?.['ecole de provenance'] || reg.customFields?.['école de provenance'] || '-'}
+                          </td>
+
                           <td className="p-4 text-gray-600 text-xs font-mono">
-                            <div>
-                              <span>{reg.phone}</span>
-                              {reg.parentPhone && (
-                                <span className="block mt-1 text-[10px] text-indigo-500">Parent: {reg.parentPhone}</span>
-                              )}
-                            </div>
+                            {reg.phone || '-'}
+                          </td>
+
+                          <td className="p-4 text-gray-600 text-xs font-mono">
+                            {reg.parentPhone || '-'}
+                          </td>
+
+                          <td className="p-4 text-gray-600 text-xs">
+                            {reg.customFields?.['Filière souhaitée'] || reg.customFields?.['filière souhaitée'] || reg.customFields?.['filiere souhaitee'] || '-'}
                           </td>
 
                           <td className="p-4">
@@ -1322,28 +1368,57 @@ const AdminProspects = () => {
                           </td>
 
                           <td className="p-4 text-center">
-                            <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  sendWhatsAppMessage(reg, 'jeune');
-                                }}
-                                className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 rounded-full transition-colors inline-flex"
-                                title="Contacter Jeune sur WhatsApp"
-                              >
-                                <Send size={14} />
-                              </button>
-                              {reg.parentPhone && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    sendWhatsAppMessage(reg, 'parent');
-                                  }}
-                                  className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-700 rounded-full transition-colors inline-flex"
-                                  title="Contacter Parent sur WhatsApp"
-                                >
-                                  <Send size={14} />
-                                </button>
+                            <div className="flex gap-1 justify-center flex-wrap" onClick={(e) => e.stopPropagation()}>
+                              {reg.status === 'to_do' ? (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      sendWhatsAppMessage(reg, 'jeune');
+                                    }}
+                                    className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 rounded-full transition-colors inline-flex"
+                                    title="Contacter Jeune sur WhatsApp"
+                                  >
+                                    <Send size={14} />
+                                  </button>
+                                  {reg.parentPhone && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        sendWhatsAppMessage(reg, 'parent');
+                                      }}
+                                      className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-700 rounded-full transition-colors inline-flex"
+                                      title="Contacter Parent sur WhatsApp"
+                                    >
+                                      <Send size={14} />
+                                    </button>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      sendWhatsAppMessage(reg, 'relance_jeune');
+                                    }}
+                                    className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 hover:text-amber-700 rounded-full transition-colors inline-flex"
+                                    title="Relancer Jeune sur WhatsApp"
+                                  >
+                                    <Send size={14} />
+                                  </button>
+                                  {reg.parentPhone && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        sendWhatsAppMessage(reg, 'relance_parent');
+                                      }}
+                                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-full transition-colors inline-flex"
+                                      title="Relancer Parent sur WhatsApp"
+                                    >
+                                      <Send size={14} />
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           </td>
