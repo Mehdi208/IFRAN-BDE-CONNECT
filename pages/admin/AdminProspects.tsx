@@ -264,7 +264,19 @@ const AdminProspects = () => {
         });
       } else {
         // Fallback column guessing if NO headers were found
-        if (cols.length >= 3) {
+        if (cols.length >= 6) {
+          const nameParts = cols[0].split(/\s+/);
+          firstName = nameParts[0] || '';
+          lastName = nameParts.slice(1).join(' ') || '';
+          customFields['Classe'] = cols[1];
+          customFields['École de provenance'] = cols[2];
+          phone = cols[3];
+          parentPhoneStr = cols[4];
+          customFields['Filière souhaitée'] = cols[5];
+          for (let cIdx = 6; cIdx < cols.length; cIdx++) {
+            customFields[`Colonne ${cIdx + 1}`] = cols[cIdx];
+          }
+        } else if (cols.length >= 3) {
           firstName = cols[0];
           lastName = cols[1];
           phone = cols[2];
@@ -1398,7 +1410,7 @@ const AdminProspects = () => {
               Coller des cellules Excel / Google Sheets
             </h2>
             <p className="text-xs text-gray-500 mb-4">
-              Copiez directement vos lignes/colonnes depuis Excel ou Google Sheets (Prénom, Nom, Téléphone) et collez-les dans la zone ci-dessous. Les colonnes seront détectées automatiquement !
+              Copiez directement vos lignes/colonnes depuis Excel ou Google Sheets (Nom et prénom, Classe, École de provenance, Tél. jeune, Tél. parent, Filière souhaitée) et collez-les dans la zone ci-dessous. Les colonnes seront détectées automatiquement !
             </p>
 
             {importError && (
@@ -1413,7 +1425,7 @@ const AdminProspects = () => {
                 rows={8}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
-                placeholder="Exemple de format collé :&#10;Jean	Dupont	0102030405&#10;Marie	Durand	0708091011"
+                placeholder="Exemple de format collé :&#10;Jean Dupont	Terminale D	Lycée Classique	0102030405	0505050505	Informatique"
                 className="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-gray-50 focus:bg-white resize-none"
               />
 
