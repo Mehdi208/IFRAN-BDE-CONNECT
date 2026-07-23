@@ -154,11 +154,14 @@ export interface Stats {
 
 export interface ProspectContact {
   id: string;
+  userId?: string;
   firstName: string;
   lastName: string;
-  phone: string;
+  phone: string; // Tél. jeune
+  parentPhone?: string; // Tél. parent
   status: 'to_do' | 'in_progress' | 'sent' | 'ignored';
   notes?: string;
+  whatsappLink?: string; // Stored link from CSV if exists
   lastContactedAt?: string;
   customFields?: Record<string, string>; // Extra columns from CSV/Sheets
 }

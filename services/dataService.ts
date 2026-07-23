@@ -42,6 +42,27 @@ const getAll = async <T>(collectionName: string, mockData: T[]): Promise<T[]> =>
   return getFromStorage(collectionName, mockData);
 };
 
+const getAllForUser = async <T>(collectionName: string, mockData: T[]): Promise<T[]> => {
+  const userId = auth.currentUser?.uid;
+  if (!userId) return mockData;
+
+  if (db) {
+    try {
+      const q = query(collection(db, collectionName), where('userId', '==', userId));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.warn(`Firestore read error on ${collectionName}, falling back to local:`, error);
+    }
+  }
+  const allData = getFromStorage<any[]>(collectionName, mockData);
+  return allData.filter(item => item.userId === userId) as T[];
+};
+
 export const dataService = {
   uploadImage: (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -426,9 +447,10 @@ export const dataService = {
   },
 
   // --- PROSPECTS CAMPAIGNS ---
-  fetchProspects: () => getAll<ProspectContact>('prospect_contacts', []),
+  fetchProspects: () => getAllForUser<ProspectContact>('prospect_contacts', []),
   addProspect: async (p: Omit<ProspectContact, 'id'>) => {
-    const data = sanitizeData(p);
+    const userId = auth.currentUser?.uid;
+    const data = sanitizeData(userId ? { ...p, userId } : p);
     if (db) {
       try {
         await addDoc(collection(db, 'prospect_contacts'), data);
@@ -442,7 +464,8 @@ export const dataService = {
     return dataService.fetchProspects();
   },
   updateProspect: async (p: ProspectContact) => {
-    const { id, ...data } = sanitizeData(p);
+    const userId = auth.currentUser?.uid;
+    const { id, ...data } = sanitizeData(userId ? { ...p, userId } : p);
     if (db) {
       try {
         await updateDoc(doc(db, 'prospect_contacts', id), data);
@@ -469,9 +492,12 @@ export const dataService = {
     return dataService.fetchProspects();
   },
   saveProspectsBulk: async (contacts: ProspectContact[]) => {
+    const userId = auth.currentUser?.uid;
     if (db) {
       try {
-        const snapshot = await getDocs(collection(db, 'prospect_contacts'));
+        // Only delete the current user's old records
+        const q = userId ? query(collection(db, 'prospect_contacts'), where('userId', '==', userId)) : query(collection(db, 'prospect_contacts'));
+        const snapshot = await getDocs(q);
         const deleteBatch = writeBatch(db);
         snapshot.forEach(d => deleteBatch.delete(d.ref));
         await deleteBatch.commit();
@@ -480,22 +506,22 @@ export const dataService = {
         contacts.forEach(c => {
           const docRef = doc(collection(db, 'prospect_contacts'));
           const { id, ...data } = c;
-          addBatch.set(docRef, sanitizeData(data));
+          addBatch.set(docRef, sanitizeData(userId ? { ...data, userId } : data));
         });
         await addBatch.commit();
       } catch (error) {
         console.warn("Error saving prospects bulk in Firestore, falling back to local:", error);
-        saveToStorage('prospect_contacts', contacts);
+        if (!userId) saveToStorage('prospect_contacts', contacts);
       }
     } else {
-      saveToStorage('prospect_contacts', contacts);
+      if (!userId) saveToStorage('prospect_contacts', contacts);
     }
     return dataService.fetchProspects();
   },
-  fetchCampaignTemplate: async (): Promise<string> => {
+  fetchCampaignTemplate: async (templateId: string = 'default'): Promise<string> => {
     if (db) {
       try {
-        const docSnap = await getDoc(doc(db, 'campaign_templates', 'default'));
+        const docSnap = await getDoc(doc(db, 'campaign_templates', templateId));
         if (docSnap.exists()) {
           return docSnap.data().body || '';
         }
@@ -503,18 +529,21 @@ export const dataService = {
         console.warn("Error fetching template from Firestore:", error);
       }
     }
-    return getFromStorage<string>('campaign_template_body', "Bonjour {prenom} {nom},\n\nNous avons le plaisir de vous recontacter suite à votre intérêt pour l'IFRAN. Quelles sont vos disponibilités pour un échange téléphonique ?\n\nCordialement,\nLe BDE IFRAN");
+    const defaultTemplate = templateId === 'parent' 
+      ? "Bonjour M./Mme {nom},\n\nj'espère que vous allez bien. Je suis Méhdi Traoré, étudiant à l'Institut Français du Numérique (IFRAN). Nous avons eu vos coordonnées lors d'un salon d’orientation / journée carrière après avoir échangé avec votre enfant {prenom}. Je reviens vers vous concernant son orientation, pour savoir si vous avez déjà choisi une université pour sa filière, ou si vous envisagez notre école...😊"
+      : "Bonjour {prenom},\n\nj’espère que vous allez bien. Je suis Méhdi Traoré, de l’Institut Français du Numérique (l’IFRAN). Nous avons eu vos coordonnées lors d'un salon d’orientation / journée carrière. Je reviens vers vous pour savoir si vous avez déjà une université, ou si vous envisagez de venir dans notre école...😊";
+    return getFromStorage<string>(`campaign_template_${templateId}`, defaultTemplate);
   },
-  saveCampaignTemplate: async (body: string) => {
+  saveCampaignTemplate: async (body: string, templateId: string = 'default') => {
     if (db) {
       try {
         const { setDoc } = await import('firebase/firestore');
-        await setDoc(doc(db, 'campaign_templates', 'default'), { body });
+        await setDoc(doc(db, 'campaign_templates', templateId), { body });
       } catch (error) {
         console.warn("Error saving template to Firestore:", error);
       }
     }
-    saveToStorage('campaign_template_body', body);
+    saveToStorage(`campaign_template_${templateId}`, body);
     return body;
   }
 };

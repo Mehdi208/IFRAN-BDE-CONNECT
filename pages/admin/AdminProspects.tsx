@@ -37,6 +37,8 @@ const AdminProspects = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [templateBody, setTemplateBody] = useState('');
+  const [parentTemplateBody, setParentTemplateBody] = useState('');
+  const [activeTemplateTab, setActiveTemplateTab] = useState<'jeune' | 'parent'>('jeune');
   const [isTemplateSaving, setIsTemplateSaving] = useState(false);
   const [isBulkImporting, setIsBulkImporting] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -68,8 +70,8 @@ const AdminProspects = () => {
   const [autoNextMode, setAutoNextMode] = useState(true);
 
   // Campaign auto-advance handler
-  const handleCampaignSend = async (contact: ProspectContact) => {
-    sendWhatsAppMessage(contact);
+  const handleCampaignSend = async (contact: ProspectContact, target: 'jeune' | 'parent' = 'jeune') => {
+    sendWhatsAppMessage(contact, target);
     if (autoNextMode) {
       setTimeout(() => {
         nextCampaignContact('sent');
@@ -89,8 +91,10 @@ const AdminProspects = () => {
         setActiveContactId(p[0].id);
       }
 
-      const t = await dataService.fetchCampaignTemplate();
-      setTemplateBody(t);
+      const tJeune = await dataService.fetchCampaignTemplate('jeune');
+      const tParent = await dataService.fetchCampaignTemplate('parent');
+      setTemplateBody(tJeune);
+      setParentTemplateBody(tParent);
     } catch (e) {
       console.error("Error loading prospects data:", e);
     } finally {
@@ -134,8 +138,12 @@ const AdminProspects = () => {
   const handleSaveTemplate = async () => {
     setIsTemplateSaving(true);
     try {
-      await dataService.saveCampaignTemplate(templateBody);
-      showTemporarySuccess("Modèle de message enregistré avec succès !");
+      if (activeTemplateTab === 'jeune') {
+        await dataService.saveCampaignTemplate(templateBody, 'jeune');
+      } else {
+        await dataService.saveCampaignTemplate(parentTemplateBody, 'parent');
+      }
+      showTemporarySuccess(`Modèle ${activeTemplateTab} enregistré avec succès !`);
     } catch (e) {
       alert("Erreur lors de la sauvegarde du modèle");
     } finally {
@@ -158,7 +166,13 @@ const AdminProspects = () => {
     const before = text.substring(0, start);
     const after = text.substring(end, text.length);
     const newText = before + tag + after;
-    setTemplateBody(newText);
+    
+    if (activeTemplateTab === 'jeune') {
+      setTemplateBody(newText);
+    } else {
+      setParentTemplateBody(newText);
+    }
+    
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(start + tag.length, start + tag.length);
@@ -182,23 +196,37 @@ const AdminProspects = () => {
     const firstLineCols = firstLine.split(separator).map(c => c.trim());
     const firstLineColsLower = firstLineCols.map(c => c.toLowerCase());
     
-    const firstNameHeaders = ['prénom', 'prenom', 'first name', 'firstname', 'nom1', 'first'];
+    const firstNameHeaders = ['prénom', 'prenom', 'first name', 'firstname', 'nom1', 'first', 'nom et prénom', 'nom et prenom', 'nom complet', 'nom'];
     const lastNameHeaders = ['nom', 'last name', 'lastname', 'family name', 'surname', 'last'];
     const phoneHeaders = ['téléphone', 'telephone', 'tél', 'tel', 'phone', 'phone number', 'numéro', 'numero', 'whatsapp', 'tel', 'num', 'contact', 'cell'];
+    const youthPhoneHeaders = ['jeune', 'eleve', 'élève', 'enfant', 'candidat'];
+    const parentPhoneHeaders = ['parent', 'pere', 'père', 'mere', 'mère', 'tuteur'];
+    const linkHeaders = ['lien', 'lien whatsapp', 'url', 'whatsapp link'];
+    const statusHeaders = ['statut', 'status', 'état', 'etat'];
 
-    let firstNameIdx = firstLineColsLower.findIndex(col => firstNameHeaders.some(h => col.includes(h)));
-    let lastNameIdx = firstLineColsLower.findIndex(col => lastNameHeaders.some(h => col.includes(h) && !firstNameHeaders.some(f => col.includes(f))));
-    let phoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)));
+    let firstNameIdx = firstLineColsLower.findIndex(col => firstNameHeaders.some(h => col === h || col.includes(h)));
+    let lastNameIdx = firstLineColsLower.findIndex(col => lastNameHeaders.some(h => col === h || col.includes(h)) && col !== 'nom et prénom' && col !== 'nom'); // 'nom' can be ambiguous, let's just let it be caught by firstNameIdx if 'nom et prenom'
+    
+    let youthPhoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)) && youthPhoneHeaders.some(y => col.includes(y)));
+    let parentPhoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)) && parentPhoneHeaders.some(p => col.includes(p)));
+    let genericPhoneIdx = firstLineColsLower.findIndex(col => phoneHeaders.some(h => col.includes(h)) && youthPhoneIdx !== firstLineColsLower.indexOf(col) && parentPhoneIdx !== firstLineColsLower.indexOf(col));
 
-    const hasHeaders = firstNameIdx !== -1 || lastNameIdx !== -1 || phoneIdx !== -1;
+    if (youthPhoneIdx === -1 && genericPhoneIdx !== -1) {
+      youthPhoneIdx = genericPhoneIdx;
+    }
+
+    let linkIdx = firstLineColsLower.findIndex(col => linkHeaders.some(h => col.includes(h)));
+    let statusIdx = firstLineColsLower.findIndex(col => statusHeaders.some(h => col.includes(h)));
+
+    const hasHeaders = firstNameIdx !== -1 || youthPhoneIdx !== -1 || parentPhoneIdx !== -1 || linkIdx !== -1;
     const startIdx = hasHeaders ? 1 : 0;
 
     // Collect custom columns indices
     const customCols: { name: string; idx: number }[] = [];
     if (hasHeaders) {
       firstLineCols.forEach((colName, idx) => {
-        if (idx !== firstNameIdx && idx !== lastNameIdx && idx !== phoneIdx) {
-          customCols.push({ name: colName, idx });
+        if (idx !== firstNameIdx && idx !== lastNameIdx && idx !== youthPhoneIdx && idx !== parentPhoneIdx && idx !== genericPhoneIdx && idx !== linkIdx && idx !== statusIdx && colName.trim() !== '') {
+          customCols.push({ name: colName.trim(), idx });
         }
       });
     }
@@ -210,15 +238,27 @@ const AdminProspects = () => {
       let firstName = '';
       let lastName = '';
       let phone = '';
+      let parentPhoneStr = '';
+      let whatsappLink = '';
+      let statusStr = '';
       const customFields: Record<string, string> = {};
 
       if (hasHeaders) {
         if (firstNameIdx !== -1 && cols[firstNameIdx] !== undefined) firstName = cols[firstNameIdx];
         if (lastNameIdx !== -1 && cols[lastNameIdx] !== undefined) lastName = cols[lastNameIdx];
-        if (phoneIdx !== -1 && cols[phoneIdx] !== undefined) phone = cols[phoneIdx];
+        if (youthPhoneIdx !== -1 && cols[youthPhoneIdx] !== undefined) phone = cols[youthPhoneIdx];
+        if (parentPhoneIdx !== -1 && cols[parentPhoneIdx] !== undefined) parentPhoneStr = cols[parentPhoneIdx];
+        if (linkIdx !== -1 && cols[linkIdx] !== undefined) whatsappLink = cols[linkIdx];
+        if (statusIdx !== -1 && cols[statusIdx] !== undefined) statusStr = cols[statusIdx];
+
+        if (firstName && !lastName && firstName.includes(' ')) {
+           const parts = firstName.split(/\s+/);
+           firstName = parts[0];
+           lastName = parts.slice(1).join(' ');
+        }
 
         customCols.forEach(cc => {
-          if (cols[cc.idx] !== undefined) {
+          if (cols[cc.idx] !== undefined && cols[cc.idx].trim() !== '') {
             customFields[cc.name] = cols[cc.idx];
           }
         });
@@ -242,15 +282,27 @@ const AdminProspects = () => {
         }
       }
 
-      // Basic cleanup
-      const cleanPhone = phone.replace(/[\s\.\-\(\)]/g, '');
+      // Basic cleanup: handle cases like "0586802761 / 0707463054" by taking the first part
+      const primaryPhone = phone.split('/')[0] || '';
+      const cleanPhone = primaryPhone.replace(/[^0-9+]/g, '');
+      const primaryParentPhone = parentPhoneStr.split('/')[0] || '';
+      const cleanParentPhone = primaryParentPhone.replace(/[^0-9+]/g, '');
 
-      if (firstName || lastName || cleanPhone) {
+      let parsedStatus: 'to_do' | 'in_progress' | 'sent' | 'ignored' = 'to_do';
+      const s = statusStr.toLowerCase();
+      if (s.includes('envoyé') || s.includes('sent') || s.includes('inscrit')) parsedStatus = 'sent';
+      else if (s.includes('cours') || s.includes('progress') || s.includes('relance')) parsedStatus = 'in_progress';
+      else if (s.includes('refus') || s.includes('ignored')) parsedStatus = 'ignored';
+      else if (s.includes('faire') || s.includes('todo')) parsedStatus = 'to_do';
+
+      if (firstName || lastName || cleanPhone || cleanParentPhone || whatsappLink) {
         parsed.push({
           firstName: firstName || 'Prospect',
           lastName: lastName || '',
           phone: cleanPhone || '',
-          status: 'to_do',
+          parentPhone: cleanParentPhone || undefined,
+          whatsappLink: whatsappLink || undefined,
+          status: parsedStatus,
           notes: '',
           customFields: Object.keys(customFields).length > 0 ? customFields : undefined
         });
@@ -447,17 +499,19 @@ const AdminProspects = () => {
   };
 
   // Launch direct message and update status
-  const sendWhatsAppMessage = async (contact: ProspectContact) => {
-    const message = personalizeMessage(templateBody, contact);
+  const sendWhatsAppMessage = async (contact: ProspectContact, target: 'jeune' | 'parent' = 'jeune') => {
+    const template = target === 'jeune' ? templateBody : parentTemplateBody;
+    const message = personalizeMessage(template, contact);
     const encodedMsg = encodeURIComponent(message);
-    const formattedPhone = formatPhoneForWhatsApp(contact.phone);
+    const phoneToUse = target === 'jeune' ? contact.phone : (contact.parentPhone || contact.phone);
+    const formattedPhone = formatPhoneForWhatsApp(phoneToUse);
+    const url = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodedMsg}`;
     
     // Open in WhatsApp link
-    const url = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodedMsg}`;
     window.open(url, '_blank');
 
     // Automatically transition state to "Envoyé" or prompt
-    if (contact.status !== 'sent') {
+    if (!campaignMode && contact.status !== 'sent') {
       try {
         const updated = await dataService.updateProspect({
           ...contact,
@@ -476,6 +530,12 @@ const AdminProspects = () => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
+  };
+
+  const getPreviewMessage = (contact: ProspectContact | null) => {
+    if (!contact) return '';
+    const template = activeTemplateTab === 'jeune' ? templateBody : parentTemplateBody;
+    return personalizeMessage(template, contact);
   };
 
   const handleMassDelete = async () => {
@@ -511,18 +571,18 @@ const AdminProspects = () => {
     }
   };
 
-  // Campaign Workflow Queue (finds all "to_do" or "in_progress" items)
-  const campaignQueue = useMemo(() => {
-    return prospects.filter(p => p.status === 'to_do' || p.status === 'in_progress');
-  }, [prospects]);
-
-  const currentCampaignContact = campaignQueue[currentCampaignIndex] || null;
+  // Campaign Workflow Queue
+  const [campaignList, setCampaignList] = useState<ProspectContact[]>([]);
+  
+  const currentCampaignContact = campaignList[currentCampaignIndex] || null;
 
   const startCampaignFlow = () => {
-    if (campaignQueue.length === 0) {
+    const list = prospects.filter(p => p.status === 'to_do' || p.status === 'in_progress');
+    if (list.length === 0) {
       alert("Aucun contact à relancer avec le statut 'À faire' ou 'En cours' !");
       return;
     }
+    setCampaignList(list);
     setCurrentCampaignIndex(0);
     setCampaignMode(true);
   };
@@ -543,10 +603,11 @@ const AdminProspects = () => {
       }
     }
 
-    if (currentCampaignIndex + 1 < campaignQueue.length) {
+    if (currentCampaignIndex + 1 < campaignList.length) {
       setCurrentCampaignIndex(prev => prev + 1);
     } else {
       setCampaignMode(false);
+      setCampaignList([]);
       alert("🎉 Félicitations ! Vous avez parcouru toute votre liste de contacts.");
     }
   };
@@ -557,15 +618,27 @@ const AdminProspects = () => {
       return;
     }
 
-    const headers = "Prenom,Nom,Telephone,Statut,Notes,DernierContact\n";
-    const rows = prospects.map(p => 
-      `"${p.firstName.replace(/"/g, '""')}",` +
-      `"${p.lastName.replace(/"/g, '""')}",` +
-      `"${p.phone}",` +
-      `"${p.status}",` +
-      `"${(p.notes || '').replace(/"/g, '""')}",` +
-      `"${p.lastContactedAt || ''}"`
-    ).join("\n");
+    const headers = ["Prenom", "Nom", "Telephone", "Telephone Parent", "Statut", "Lien WhatsApp", "Notes", "DernierContact", ...availableCustomFields].join(",") + "\n";
+    
+    const rows = prospects.map(p => {
+      const baseRow = [
+        `"${p.firstName.replace(/"/g, '""')}"`,
+        `"${p.lastName.replace(/"/g, '""')}"`,
+        `"${p.phone}"`,
+        `"${p.parentPhone || ''}"`,
+        `"${p.status}"`,
+        `"${(p.whatsappLink || '').replace(/"/g, '""')}"`,
+        `"${(p.notes || '').replace(/"/g, '""')}"`,
+        `"${p.lastContactedAt || ''}"`
+      ];
+
+      const customRow = availableCustomFields.map(cf => {
+        const val = p.customFields && p.customFields[cf] ? p.customFields[cf] : '';
+        return `"${val.replace(/"/g, '""')}"`;
+      });
+
+      return [...baseRow, ...customRow].join(",");
+    }).join("\n");
 
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -591,6 +664,17 @@ const AdminProspects = () => {
       return matchSearch && matchStatus;
     });
   }, [prospects, searchTerm, statusFilter]);
+
+  // Collect all unique custom fields from prospects to show in template builder
+  const availableCustomFields = useMemo(() => {
+    const fields = new Set<string>();
+    prospects.forEach(p => {
+      if (p.customFields) {
+        Object.keys(p.customFields).forEach(k => fields.add(k));
+      }
+    });
+    return Array.from(fields);
+  }, [prospects]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -735,7 +819,7 @@ const AdminProspects = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
               <div className="space-y-1">
                 <span className="bg-bde-rose text-white text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
-                  Campagne Active : {currentCampaignIndex + 1} / {campaignQueue.length}
+                  Campagne Active : {currentCampaignIndex + 1} / {campaignList.length}
                 </span>
                 <h2 className="text-xl font-bold flex items-center gap-2 pt-1">
                   Relance active pour : <span className="text-yellow-300">{currentCampaignContact.firstName} {currentCampaignContact.lastName}</span>
@@ -747,12 +831,21 @@ const AdminProspects = () => {
 
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => handleCampaignSend(currentCampaignContact)}
+                  onClick={() => handleCampaignSend(currentCampaignContact, 'jeune')}
                   className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition-colors"
                 >
                   <Send size={18} />
-                  {autoNextMode ? "Ouvrir & Auto-Suivant 🚀" : "Ouvrir WhatsApp"}
+                  {autoNextMode ? "Jeune & Auto-Suivant 🚀" : "Ouvrir Jeune"}
                 </button>
+                {currentCampaignContact.parentPhone && (
+                  <button
+                    onClick={() => handleCampaignSend(currentCampaignContact, 'parent')}
+                    className="px-5 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-indigo-950/40 transition-colors"
+                  >
+                    <Send size={18} />
+                    {autoNextMode ? "Parent & Auto-Suivant 🚀" : "Ouvrir Parent"}
+                  </button>
+                )}
                 <button
                   onClick={() => nextCampaignContact('sent')}
                   className="px-4 py-3 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-sm font-semibold flex items-center gap-1.5 transition-colors"
@@ -776,15 +869,25 @@ const AdminProspects = () => {
             </div>
 
             {/* Inner Live Message Preview for campaign runner */}
-            <div className="mt-4 bg-black/30 p-4 rounded-xl border border-white/10 max-h-32 overflow-y-auto">
-              <p className="text-xs text-gray-400 font-bold mb-1">Aperçu du message envoyé :</p>
-              <p className="text-sm text-gray-100 whitespace-pre-line italic">
-                {personalizeMessage(templateBody, currentCampaignContact)}
-              </p>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-black/30 p-4 rounded-xl border border-white/10 max-h-40 overflow-y-auto">
+                <p className="text-xs text-gray-400 font-bold mb-1">Aperçu Jeune :</p>
+                <p className="text-sm text-gray-100 whitespace-pre-line italic">
+                  {personalizeMessage(templateBody, currentCampaignContact)}
+                </p>
+              </div>
+              {currentCampaignContact.parentPhone && (
+                <div className="bg-black/30 p-4 rounded-xl border border-white/10 max-h-40 overflow-y-auto">
+                  <p className="text-xs text-gray-400 font-bold mb-1">Aperçu Parent :</p>
+                  <p className="text-sm text-gray-100 whitespace-pre-line italic">
+                    {personalizeMessage(parentTemplateBody, currentCampaignContact)}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Auto Next Mode Selector */}
-            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between gap-4 relative z-10 text-xs">
+            <div className="mt-4 pt-4 border-t border-white/10 flex flex-col gap-2 relative z-10 text-xs">
               <label className="flex items-center gap-2.5 cursor-pointer select-none text-gray-300 hover:text-white transition-colors">
                 <input 
                   type="checkbox" 
@@ -793,9 +896,12 @@ const AdminProspects = () => {
                   className="rounded border-gray-400 text-bde-rose focus:ring-bde-rose h-4 w-4 bg-white/10 border-white/20"
                 />
                 <span className="font-semibold flex items-center gap-1.5">
-                  🚀 Activer le Mode Rafale (l'ouverture de WhatsApp valide et passe au contact suivant automatiquement en 1 clic)
+                  🚀 Activer le Mode Rafale (l'ouverture de WhatsApp valide et prépare le contact suivant automatiquement)
                 </span>
               </label>
+              <p className="text-[10px] text-gray-400 pl-6 leading-relaxed">
+                <strong className="text-yellow-400/90">Note sur l'automatisation totale :</strong> WhatsApp bloque l'envoi de dizaines de messages simultanés sans clic manuel (protection anti-spam). Ce "Mode Rafale" est la méthode la plus rapide autorisée : cliquez sur Ouvrir, validez sur WhatsApp, et l'application passe instantanément au suivant sans action supplémentaire de votre part !
+              </p>
             </div>
           </div>
         )}
@@ -823,6 +929,22 @@ const AdminProspects = () => {
                 </button>
               </div>
 
+              {/* Template Tabs */}
+              <div className="flex gap-2 border-b border-gray-200 mb-4 pb-2">
+                <button
+                  onClick={() => setActiveTemplateTab('jeune')}
+                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'jeune' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
+                >
+                  Message Jeune
+                </button>
+                <button
+                  onClick={() => setActiveTemplateTab('parent')}
+                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${activeTemplateTab === 'parent' ? 'bg-bde-rose text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'}`}
+                >
+                  Message Parent
+                </button>
+              </div>
+
               <p className="text-xs text-gray-500 mb-3">
                 Utilisez les balises ci-dessous pour personnaliser dynamiquement le message avec les données du prospect.
               </p>
@@ -847,6 +969,16 @@ const AdminProspects = () => {
                 >
                   + Téléphone
                 </button>
+                {availableCustomFields.map(field => (
+                  <button 
+                    key={field}
+                    onClick={() => insertTag(`{${field}}`)} 
+                    className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-mono font-semibold rounded-md border border-emerald-200 transition-colors truncate max-w-[150px]"
+                    title={`Ajouter la colonne: ${field}`}
+                  >
+                    + {field}
+                  </button>
+                ))}
               </div>
 
               {/* Template editor body */}
@@ -854,9 +986,9 @@ const AdminProspects = () => {
                 <textarea
                   id="template-textarea"
                   rows={7}
-                  value={templateBody}
-                  onChange={(e) => setTemplateBody(e.target.value)}
-                  placeholder="Rédigez ici votre modèle de message..."
+                  value={activeTemplateTab === 'jeune' ? templateBody : parentTemplateBody}
+                  onChange={(e) => activeTemplateTab === 'jeune' ? setTemplateBody(e.target.value) : setParentTemplateBody(e.target.value)}
+                  placeholder={`Rédigez ici votre modèle de message pour le ${activeTemplateTab}...`}
                   className="w-full p-3.5 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-bde-rose focus:border-transparent outline-none font-sans leading-relaxed resize-none bg-gray-50 focus:bg-white transition-all"
                 />
               </div>
@@ -901,7 +1033,7 @@ const AdminProspects = () => {
                     {/* Chat Bubble Body */}
                     <div className="flex-1 p-3 flex flex-col justify-end space-y-4">
                       <div className="bg-white border border-gray-200/50 p-3 rounded-2xl rounded-tl-none max-w-[85%] shadow-sm self-start leading-relaxed text-gray-700 font-sans whitespace-pre-line relative animate-fade-in">
-                        {personalizeMessage(templateBody, activeContact) || "Modèle vide. Écrivez quelque chose ci-dessus !"}
+                        {getPreviewMessage(activeContact) || "Modèle vide. Écrivez quelque chose ci-dessus !"}
                         <span className="text-[9px] text-gray-400 block text-right mt-1">
                           {new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}
                         </span>
@@ -966,7 +1098,7 @@ const AdminProspects = () => {
                   <div className="flex gap-2 w-full sm:w-auto">
                     <button
                       onClick={startCampaignFlow}
-                      disabled={campaignQueue.length === 0}
+                      disabled={prospects.filter(p => p.status === 'to_do' || p.status === 'in_progress').length === 0}
                       className="px-4 py-2 bg-bde-rose hover:bg-opacity-90 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-rose-100 transition-all cursor-pointer"
                     >
                       <Play size={14} fill="currentColor" />
@@ -1165,7 +1297,12 @@ const AdminProspects = () => {
                           </td>
 
                           <td className="p-4 text-gray-600 text-xs font-mono">
-                            {reg.phone}
+                            <div>
+                              <span>{reg.phone}</span>
+                              {reg.parentPhone && (
+                                <span className="block mt-1 text-[10px] text-indigo-500">Parent: {reg.parentPhone}</span>
+                              )}
+                            </div>
                           </td>
 
                           <td className="p-4">
@@ -1173,16 +1310,30 @@ const AdminProspects = () => {
                           </td>
 
                           <td className="p-4 text-center">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                sendWhatsAppMessage(reg);
-                              }}
-                              className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 rounded-full transition-colors inline-flex"
-                              title="Contacter sur WhatsApp"
-                            >
-                              <Send size={14} />
-                            </button>
+                            <div className="flex gap-1 justify-center" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  sendWhatsAppMessage(reg, 'jeune');
+                                }}
+                                className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 rounded-full transition-colors inline-flex"
+                                title="Contacter Jeune sur WhatsApp"
+                              >
+                                <Send size={14} />
+                              </button>
+                              {reg.parentPhone && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    sendWhatsAppMessage(reg, 'parent');
+                                  }}
+                                  className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-700 rounded-full transition-colors inline-flex"
+                                  title="Contacter Parent sur WhatsApp"
+                                >
+                                  <Send size={14} />
+                                </button>
+                              )}
+                            </div>
                           </td>
 
                           <td className="p-4">
