@@ -1008,73 +1008,163 @@ const AdminProspects = () => {
     document.body.removeChild(link);
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = () => {
     if (filteredProspects.length === 0) {
       alert("Aucun contact à exporter en PDF pour ce filtre.");
       return;
     }
 
-    let element = document.getElementById('printable-report');
-    let openedTemporarily = false;
-
-    if (!element) {
-      setIsPdfPreviewOpen(true);
-      openedTemporarily = true;
-      await new Promise(resolve => setTimeout(resolve, 350));
-      element = document.getElementById('printable-report');
-    }
-
-    if (!element) {
-      alert("Erreur lors de la préparation du document.");
-      return;
-    }
-
     try {
-      showTemporarySuccess("Génération de l'image & du PDF en cours...");
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const activeProfile = profiles.find(p => p.id === activeProfileId);
+      const profileName = activeProfile?.senderName || activeProfile?.name || 'Vue Globale (Tous)';
+      const baseName = categoryFilter === 'sheets' ? '1er Google Sheet' : categoryFilter === 'descartes' ? 'Lycée International Descartes' : 'Toutes les bases';
+      const currentDateStr = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
 
-      // Capture the exact preview element as a high-res image canvas
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: 1024
+      // Header Banner
+      doc.setFillColor(30, 27, 75); // Indigo 950
+      doc.rect(0, 0, 210, 12, 'F');
+
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.text("INSTITUT FRANÇAIS DU NUMÉRIQUE (IFRAN) — BDE & RELANCES WHATSAPP", 14, 8);
+
+      // Title & Subtitle
+      doc.setFontSize(14);
+      doc.setTextColor(30, 27, 75);
+      doc.setFont('helvetica', 'bold');
+      doc.text("Rapport de Prospection & Statuts des Prospects", 14, 22);
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Généré le ${currentDateStr} • Profil : ${profileName} • Base : ${baseName}`, 14, 27);
+
+      // Line separator
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(14, 30, 196, 30);
+
+      // Stats Summary Box
+      doc.setFillColor(248, 250, 252);
+      doc.rect(14, 33, 182, 14, 'F');
+      doc.setDrawColor(203, 213, 225);
+      doc.rect(14, 33, 182, 14, 'S');
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(51, 65, 85);
+      doc.text(`TOTAL : ${activeStats.total}`, 18, 42);
+      
+      doc.setTextColor(180, 83, 9); // Amber
+      doc.text(`À FAIRE : ${activeStats.toDo}`, 62, 42);
+
+      doc.setTextColor(5, 150, 105); // Green
+      doc.text(`RELANCÉS : ${activeStats.sent}`, 108, 42);
+
+      doc.setTextColor(79, 70, 229); // Indigo
+      doc.text(`AVANCEMENT : ${activeStats.progressPercent}%`, 152, 42);
+
+      // Table Data
+      const tableRows = filteredProspects.map((p, idx) => {
+        const prof = profiles.find(pr => pr.id === (p.profileId || 'mehdi'));
+        const provenance = p.customFields?.['École de provenance'] || (isDescartesProspect(p) ? 'Lycée Descartes' : 'Non précisée');
+        const statusLabel = 
+          p.status === 'sent' ? 'Relancé' :
+          p.status === 'in_progress' ? 'En cours' :
+          p.status === 'ignored' ? 'Ignoré' : 'À faire';
+
+        return [
+          (idx + 1).toString(),
+          `${p.firstName} ${p.lastName}`.trim(),
+          p.phone || '-',
+          provenance,
+          statusLabel,
+          prof?.name || 'Mehdi'
+        ];
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      autoTable(doc, {
+        startY: 51,
+        head: [['#', 'Nom & Prénom', 'Téléphone', 'École / Provenance', 'Statut', 'Profil']],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [49, 46, 129], // Indigo 900
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8,
+          halign: 'left',
+        },
+        bodyStyles: {
+          fontSize: 8,
+          textColor: [30, 41, 59],
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 44 },
+          2: { cellWidth: 32 },
+          3: { cellWidth: 46 },
+          4: { cellWidth: 26, halign: 'center' },
+          5: { cellWidth: 24, halign: 'center' },
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            const statusText = data.row.raw[4];
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            // Apply soft background row styling based on status
+            if (statusText === 'Relancé') {
+              data.cell.styles.fillColor = [240, 253, 244]; // Soft emerald tint for the row
+            } else if (statusText === 'En cours') {
+              data.cell.styles.fillColor = [254, 252, 232]; // Soft amber tint for the row
+            } else if (statusText === 'Ignoré') {
+              data.cell.styles.fillColor = [254, 242, 242]; // Soft rose tint for the row
+            } else {
+              data.cell.styles.fillColor = data.row.index % 2 === 0 ? [255, 255, 255] : [248, 250, 252];
+            }
 
-      let heightLeft = imgHeight;
-      let position = 0;
+            // Highlight status badge column explicitly
+            if (data.column.index === 4) {
+              if (statusText === 'Relancé') {
+                data.cell.styles.fillColor = [187, 247, 208]; // Emerald 200
+                data.cell.styles.textColor = [22, 101, 52];   // Dark green
+                data.cell.styles.fontStyle = 'bold';
+              } else if (statusText === 'En cours') {
+                data.cell.styles.fillColor = [253, 230, 138]; // Amber 200
+                data.cell.styles.textColor = [146, 64, 14];   // Dark amber
+                data.cell.styles.fontStyle = 'bold';
+              } else if (statusText === 'Ignoré') {
+                data.cell.styles.fillColor = [254, 202, 202]; // Rose 200
+                data.cell.styles.textColor = [153, 27, 27];   // Dark red
+                data.cell.styles.fontStyle = 'bold';
+              } else {
+                data.cell.styles.fillColor = [226, 232, 240]; // Slate 200
+                data.cell.styles.textColor = [51, 65, 85];    // Slate 700
+                data.cell.styles.fontStyle = 'bold';
+              }
+            }
+          }
+        },
+        didDrawPage: (data) => {
+          const pageCount = (doc as any).internal.getNumberOfPages();
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(148, 163, 184);
+          doc.text(
+            `Plateforme Relances WhatsApp - IFRAN | Page ${data.pageNumber} sur ${pageCount}`,
+            14,
+            doc.internal.pageSize.height - 8
+          );
+        }
+      });
 
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position -= pageHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      const activeProfile = profiles.find(p => p.id === activeProfileId);
-      const profileName = activeProfile?.senderName || activeProfile?.name || 'vue_globale';
       const safeProfile = profileName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-
-      pdf.save(`Rapport_Prospection_${safeProfile}_${new Date().toISOString().slice(0, 10)}.pdf`);
-      showTemporarySuccess("Le rapport PDF au rendu visuel exact a été téléchargé !");
-
-      if (openedTemporarily) {
-        setIsPdfPreviewOpen(false);
-      }
+      doc.save(`Rapport_Prospection_${safeProfile}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      showTemporarySuccess("Le rapport PDF vectoriel avec statuts colorés a été téléchargé !");
     } catch (e) {
-      console.error("Erreur lors de la génération du PDF image:", e);
-      alert("Impossible de générer le fichier PDF. Veuillez réespayer.");
+      console.error("Erreur lors de la génération du PDF:", e);
+      alert("Impossible de générer le fichier PDF. Veuillez réessayer.");
     }
   };
 
