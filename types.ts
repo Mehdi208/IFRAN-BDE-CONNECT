@@ -152,9 +152,19 @@ export interface Stats {
   eventsCount: number;
 }
 
+export interface RelancerProfile {
+  id: string;
+  name: string;
+  senderName?: string;
+  role?: string;
+  color?: string;
+  avatarEmoji?: string;
+}
+
 export interface ProspectContact {
   id: string;
   userId?: string;
+  profileId?: string; // e.g. 'mehdi', 'emmanuelle', 'nour', 'joshua', 'othniel'
   category?: 'sheets' | 'descartes' | string; // 'sheets' = 1er Google Sheets, 'descartes' = Lycée International Descartes
   firstName: string;
   lastName: string;

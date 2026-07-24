@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dataService } from '../../services/dataService';
-import { ProspectContact } from '../../types';
+import { ProspectContact, RelancerProfile } from '../../types';
 import { 
   ArrowLeft, 
   Trash2, 
@@ -30,7 +30,12 @@ import {
   GraduationCap,
   Building2,
   Award,
-  FileText
+  FileText,
+  Users,
+  User,
+  UserPlus,
+  X,
+  ShieldCheck
 } from 'lucide-react';
 import AdminLayout from '../../components/AdminLayout';
 
@@ -38,10 +43,47 @@ const AdminProspects = () => {
   const navigate = useNavigate();
   const [prospects, setProspects] = useState<ProspectContact[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Profiles state for team collaboration
+  const [profiles, setProfiles] = useState<RelancerProfile[]>(() => {
+    const saved = localStorage.getItem('whatsapp_relancer_profiles');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return [
+      { id: 'mehdi', name: 'Mehdi', senderName: 'Méhdi Traoré', role: 'Responsable', color: 'indigo', avatarEmoji: '👤' },
+      { id: 'emmanuelle', name: 'Emmanuelle', senderName: 'Emmanuelle', role: 'Relanceur', color: 'rose', avatarEmoji: '🌸' },
+      { id: 'nour', name: 'Nour', senderName: 'Nour', role: 'Relanceur', color: 'amber', avatarEmoji: '⚡' },
+      { id: 'joshua', name: 'Joshua', senderName: 'Joshua', role: 'Relanceur', color: 'emerald', avatarEmoji: '🚀' },
+      { id: 'othniel', name: 'Othniel', senderName: 'Othniel', role: 'Relanceur', color: 'purple', avatarEmoji: '🌟' },
+    ];
+  });
+
+  const [activeProfileId, setActiveProfileId] = useState<string>(() => {
+    return localStorage.getItem('whatsapp_active_profile_id') || 'mehdi';
+  });
+
+  // New Profile modal state
+  const [isAddProfileModalOpen, setIsAddProfileModalOpen] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
+  const [newProfileSender, setNewProfileSender] = useState('');
+  const [newProfileRole, setNewProfileRole] = useState('Relanceur');
+  const [newProfileEmoji, setNewProfileEmoji] = useState('👤');
+
+  useEffect(() => {
+    localStorage.setItem('whatsapp_active_profile_id', activeProfileId);
+  }, [activeProfileId]);
+
+  useEffect(() => {
+    localStorage.setItem('whatsapp_relancer_profiles', JSON.stringify(profiles));
+  }, [profiles]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<'sheets' | 'descartes' | 'all'>('sheets');
-  const [schoolFilter, setSchoolFilter] = useState<'all' | 'descartes' | 'other'>('all');
   const [templateBody, setTemplateBody] = useState('');
   const [parentTemplateBody, setParentTemplateBody] = useState('');
   const [relanceJeuneTemplateBody, setRelanceJeuneTemplateBody] = useState('');
@@ -142,13 +184,26 @@ const AdminProspects = () => {
     return clean;
   };
 
-  // Replace template tags with contact details
+  // Replace template tags with contact details and dynamic sender name according to active profile
   const personalizeMessage = (template: string, contact: ProspectContact | Partial<ProspectContact>): string => {
     if (!template) return '';
+    const profId = contact.profileId || activeProfileId;
+    const currentProfile = profiles.find(p => p.id === profId) || profiles[0];
+    const senderName = currentProfile ? (currentProfile.senderName || currentProfile.name) : 'Méhdi Traoré';
+
     let msg = template
       .replace(/{prenom}/gi, contact.firstName || '')
       .replace(/{nom}/gi, contact.lastName || '')
-      .replace(/{telephone}/gi, contact.phone || '');
+      .replace(/{telephone}/gi, contact.phone || '')
+      .replace(/{expediteur}/gi, senderName);
+
+    // If template explicitly contains "Méhdi Traoré" / "Mehdi Traoré" or "Méhdi" and profile is not Mehdi, replace with active senderName
+    if (currentProfile && currentProfile.id !== 'mehdi' && senderName) {
+      msg = msg
+        .replace(/Méhdi Traoré/g, senderName)
+        .replace(/Mehdi Traoré/g, senderName)
+        .replace(/Méhdi/g, senderName);
+    }
 
     if (contact.customFields) {
       Object.entries(contact.customFields).forEach(([key, val]) => {
@@ -163,6 +218,27 @@ const AdminProspects = () => {
       });
     }
     return msg;
+  };
+
+  const handleAddProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProfileName.trim()) return;
+    const id = newProfileName.toLowerCase().trim().replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString().slice(-4);
+    const newProf: RelancerProfile = {
+      id,
+      name: newProfileName.trim(),
+      senderName: newProfileSender.trim() || newProfileName.trim(),
+      role: newProfileRole || 'Relanceur',
+      avatarEmoji: newProfileEmoji || '👤',
+      color: 'indigo'
+    };
+    const updated = [...profiles, newProf];
+    setProfiles(updated);
+    setActiveProfileId(id);
+    setNewProfileName('');
+    setNewProfileSender('');
+    setIsAddProfileModalOpen(false);
+    showTemporarySuccess(`Profil "${newProf.name}" créé avec succès !`);
   };
 
   const handleSaveTemplate = async () => {
@@ -553,11 +629,14 @@ const AdminProspects = () => {
       const merge = window.confirm(`Détecté ${parsed.length} contacts. Souhaitez-vous AJOUTER ces contacts à la liste existante ?\n(Cliquez sur "Annuler" pour REMPLACER la liste actuelle)`);
       
       let newList: ProspectContact[];
+      const targetProfile = activeProfileId === 'all' ? 'mehdi' : activeProfileId;
+
       if (merge) {
         newList = [...prospects];
         parsed.forEach(p => {
           newList.push({
             ...p,
+            profileId: p.profileId || targetProfile,
             category: p.category || defaultCategory,
             id: 'local_' + Math.random().toString(36).substr(2, 9)
           } as ProspectContact);
@@ -565,6 +644,7 @@ const AdminProspects = () => {
       } else {
         newList = parsed.map(p => ({
           ...p,
+          profileId: p.profileId || targetProfile,
           category: p.category || defaultCategory,
           id: 'local_' + Math.random().toString(36).substr(2, 9)
         } as ProspectContact));
@@ -578,7 +658,7 @@ const AdminProspects = () => {
       if (finalProspects.length > 0) {
         setActiveContactId(finalProspects[0].id);
       }
-      showTemporarySuccess(`Importation réussie : ${parsed.length} contacts synchronisés !`);
+      showTemporarySuccess(`Importation réussie : ${parsed.length} contacts synchronisés pour le profil !`);
     } catch (e) {
       setImportError("Une erreur est survenue lors de l'importation.");
     }
@@ -605,6 +685,7 @@ const AdminProspects = () => {
         }
 
         const defaultCategory = importMode === 'descartes_pdf' ? 'descartes' : (categoryFilter === 'descartes' ? 'descartes' : 'sheets');
+        const targetProfile = activeProfileId === 'all' ? 'mehdi' : activeProfileId;
 
         const merge = window.confirm(`Détecté ${parsed.length} contacts. Souhaitez-vous AJOUTER ces contacts à la liste existante ?\n(Cliquez sur "Annuler" pour REMPLACER la liste actuelle)`);
         
@@ -614,6 +695,7 @@ const AdminProspects = () => {
           parsed.forEach(p => {
             newList.push({
               ...p,
+              profileId: p.profileId || targetProfile,
               category: p.category || defaultCategory,
               id: 'local_' + Math.random().toString(36).substr(2, 9)
             } as ProspectContact);
@@ -621,6 +703,7 @@ const AdminProspects = () => {
         } else {
           newList = parsed.map(p => ({
             ...p,
+            profileId: p.profileId || targetProfile,
             category: p.category || defaultCategory,
             id: 'local_' + Math.random().toString(36).substr(2, 9)
           } as ProspectContact));
@@ -632,7 +715,7 @@ const AdminProspects = () => {
         if (finalProspects.length > 0) {
           setActiveContactId(finalProspects[0].id);
         }
-        showTemporarySuccess(`Importation réussie : ${parsed.length} contacts importés depuis le fichier !`);
+        showTemporarySuccess(`Importation réussie : ${parsed.length} contacts importés !`);
       } catch (err) {
         setImportError("Erreur lors de la lecture du fichier CSV.");
       }
@@ -655,13 +738,28 @@ const AdminProspects = () => {
   };
 
   const handleClearAll = async () => {
-    if (window.confirm("⚠️ Attention : Voulez-vous vraiment supprimer TOUS les contacts de la base de données ? Cette action est irréversible et vous permettra de ré-importer vos données proprement.")) {
+    const currentProfileObj = profiles.find(pr => pr.id === activeProfileId);
+    const profileName = currentProfileObj ? currentProfileObj.name : 'actuel';
+
+    let confirmMsg = `⚠️ Attention : Voulez-vous vraiment supprimer TOUS les contacts du profil "${profileName}" ?`;
+    if (activeProfileId === 'all') {
+      confirmMsg = "⚠️ Attention : Voulez-vous vraiment supprimer TOUS les contacts de TOUS les profils (Mehdi, Emmanuelle, Nour, Joshua, Othniel...) ?";
+    } else {
+      confirmMsg += "\n\nCette action supprimera uniquement vos données sans altérer les bases de vos collaborateurs.";
+    }
+
+    if (window.confirm(confirmMsg)) {
       try {
-        const updated = await dataService.deleteAllProspects();
-        setProspects(updated);
+        if (activeProfileId === 'all') {
+          const updated = await dataService.deleteAllProspects();
+          setProspects(updated);
+        } else {
+          const updated = await dataService.deleteProspectsByProfile(activeProfileId);
+          setProspects(updated);
+        }
         setActiveContactId(null);
         setSelectedIds([]);
-        showTemporarySuccess("Toutes les données de la base ont été définitivement supprimées.");
+        showTemporarySuccess(`Les contacts du profil "${profileName}" ont été supprimés avec succès.`);
       } catch (e) {
         alert("Erreur lors de la réinitialisation de la base de données.");
       }
@@ -688,7 +786,9 @@ const AdminProspects = () => {
     if (initialCategory === 'descartes') {
       initialCustomFields['École de provenance'] = 'Lycée International Descartes';
     }
+    const targetProfile = activeProfileId === 'all' ? 'mehdi' : activeProfileId;
     setFormProspect({
+      profileId: targetProfile,
       category: initialCategory,
       firstName: '',
       lastName: '',
@@ -724,15 +824,19 @@ const AdminProspects = () => {
         customF['École de provenance'] = 'Lycée International Descartes';
       }
 
+      const targetProfile = formProspect.profileId || (activeProfileId === 'all' ? 'mehdi' : activeProfileId);
+
       if (editingProspect) {
         updated = await dataService.updateProspect({
           ...editingProspect,
           ...formProspect,
+          profileId: targetProfile,
           category: cat,
           customFields: customF
         } as ProspectContact);
       } else {
         updated = await dataService.addProspect({
+          profileId: targetProfile,
           category: cat,
           firstName: formProspect.firstName,
           lastName: formProspect.lastName || '',
@@ -846,8 +950,8 @@ const AdminProspects = () => {
   const startCampaignFlow = (descartesOnly = false) => {
     const isDescartesFilterActive = descartesOnly || schoolFilter === 'descartes';
     const sourceProspects = isDescartesFilterActive 
-      ? prospects.filter(p => isDescartesProspect(p))
-      : (schoolFilter === 'other' ? prospects.filter(p => !isDescartesProspect(p)) : prospects);
+      ? profileProspects.filter(p => isDescartesProspect(p))
+      : (schoolFilter === 'other' ? profileProspects.filter(p => !isDescartesProspect(p)) : profileProspects);
 
     const list = sourceProspects.filter(p => p.status === 'to_do' || p.status === 'in_progress');
     if (list.length === 0) {
@@ -925,9 +1029,24 @@ const AdminProspects = () => {
     document.body.removeChild(link);
   };
 
+  // Filter prospects belonging to active profile
+  const profileProspects = useMemo(() => {
+    if (activeProfileId === 'all') return prospects;
+    return prospects.filter(p => (p.profileId || 'mehdi') === activeProfileId);
+  }, [prospects, activeProfileId]);
+
+  // Counts per profile for tab badges
+  const profileCounts = useMemo(() => {
+    const map: Record<string, number> = { all: prospects.length };
+    profiles.forEach(pr => {
+      map[pr.id] = prospects.filter(p => (p.profileId || 'mehdi') === pr.id).length;
+    });
+    return map;
+  }, [prospects, profiles]);
+
   // Live filtered list of prospects
   const filteredProspects = useMemo(() => {
-    return prospects.filter(p => {
+    return profileProspects.filter(p => {
       // Category filter
       if (categoryFilter === 'sheets' && isDescartesProspect(p)) return false;
       if (categoryFilter === 'descartes' && !isDescartesProspect(p)) return false;
@@ -940,21 +1059,14 @@ const AdminProspects = () => {
         JSON.stringify(p.customFields || {}).toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-
-      let matchSchool = true;
-      if (schoolFilter === 'descartes') {
-        matchSchool = isDescartesProspect(p);
-      } else if (schoolFilter === 'other') {
-        matchSchool = !isDescartesProspect(p);
-      }
       
-      return matchSearch && matchStatus && matchSchool;
+      return matchSearch && matchStatus;
     });
-  }, [prospects, categoryFilter, searchTerm, statusFilter, schoolFilter]);
+  }, [profileProspects, categoryFilter, searchTerm, statusFilter]);
 
   // 1er Google Sheets specific statistics
   const sheetsStats = useMemo(() => {
-    const list = prospects.filter(p => !isDescartesProspect(p));
+    const list = profileProspects.filter(p => !isDescartesProspect(p));
     const total = list.length;
     const toDo = list.filter(p => p.status === 'to_do').length;
     const inProgress = list.filter(p => p.status === 'in_progress').length;
@@ -962,11 +1074,11 @@ const AdminProspects = () => {
     const ignored = list.filter(p => p.status === 'ignored').length;
     const progressPercent = total > 0 ? Math.round((sent / total) * 100) : 0;
     return { total, toDo, inProgress, sent, ignored, progressPercent };
-  }, [prospects]);
+  }, [profileProspects]);
 
   // Descartes specific statistics
   const descartesStats = useMemo(() => {
-    const list = prospects.filter(p => isDescartesProspect(p));
+    const list = profileProspects.filter(p => isDescartesProspect(p));
     const total = list.length;
     const toDo = list.filter(p => p.status === 'to_do').length;
     const inProgress = list.filter(p => p.status === 'in_progress').length;
@@ -974,32 +1086,39 @@ const AdminProspects = () => {
     const ignored = list.filter(p => p.status === 'ignored').length;
     const progressPercent = total > 0 ? Math.round((sent / total) * 100) : 0;
     return { total, toDo, inProgress, sent, ignored, progressPercent };
-  }, [prospects]);
+  }, [profileProspects]);
 
   // Collect all unique custom fields from prospects to show in template builder
   const availableCustomFields = useMemo(() => {
     const fields = new Set<string>();
-    prospects.forEach(p => {
+    profileProspects.forEach(p => {
       if (p.customFields) {
         Object.keys(p.customFields).forEach(k => fields.add(k));
       }
     });
     return Array.from(fields);
-  }, [prospects]);
+  }, [profileProspects]);
 
-  // Statistics
+  // Global Statistics
   const stats = useMemo(() => {
-    const total = prospects.length;
-    const toDo = prospects.filter(p => p.status === 'to_do').length;
-    const inProgress = prospects.filter(p => p.status === 'in_progress').length;
-    const sent = prospects.filter(p => p.status === 'sent').length;
-    const ignored = prospects.filter(p => p.status === 'ignored').length;
+    const total = profileProspects.length;
+    const toDo = profileProspects.filter(p => p.status === 'to_do').length;
+    const inProgress = profileProspects.filter(p => p.status === 'in_progress').length;
+    const sent = profileProspects.filter(p => p.status === 'sent').length;
+    const ignored = profileProspects.filter(p => p.status === 'ignored').length;
     
     const progressPercent = total > 0 ? Math.round((sent / total) * 100) : 0;
     const completionPercent = total > 0 ? Math.round(((sent + ignored) / total) * 100) : 0;
 
     return { total, toDo, inProgress, sent, ignored, progressPercent, completionPercent };
-  }, [prospects]);
+  }, [profileProspects]);
+
+  // Active statistics according to current category selection
+  const activeStats = useMemo(() => {
+    if (categoryFilter === 'sheets') return sheetsStats;
+    if (categoryFilter === 'descartes') return descartesStats;
+    return stats;
+  }, [categoryFilter, sheetsStats, descartesStats, stats]);
 
   // Active contact for the dynamic side preview
   const activeContact = useMemo(() => {
@@ -1031,15 +1150,28 @@ const AdminProspects = () => {
 
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setIsPasteOpen(true)}
-              className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold flex items-center gap-2 border border-indigo-200 transition-colors"
+              onClick={() => {
+                setImportMode('standard');
+                setIsPasteOpen(true);
+              }}
+              className="px-3.5 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold flex items-center gap-2 border border-indigo-200 transition-colors"
             >
               <Clipboard size={16} />
-              Coller des cellules Excel/Sheets
+              Coller Excel / 1er Google Sheet
             </button>
-            <label className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-semibold flex items-center gap-2 border border-emerald-200 cursor-pointer transition-colors">
+            <button
+              onClick={() => {
+                setImportMode('descartes_pdf');
+                setIsPasteOpen(true);
+              }}
+              className="px-3.5 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-semibold flex items-center gap-2 border border-blue-200 transition-colors"
+            >
+              <GraduationCap size={16} className="text-blue-600" />
+              Coller PDF Lycée Descartes
+            </button>
+            <label className="px-3.5 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-semibold flex items-center gap-2 border border-emerald-200 cursor-pointer transition-colors">
               <UploadCloud size={16} />
-              Importer un CSV
+              Importer CSV
               <input 
                 type="file" 
                 accept=".csv,.txt" 
@@ -1049,20 +1181,110 @@ const AdminProspects = () => {
             </label>
             <button
               onClick={handleExportCSV}
-              className="px-4 py-2 bg-white text-gray-700 hover:bg-gray-50 rounded-lg text-sm font-semibold flex items-center gap-2 border border-gray-200 shadow-sm transition-colors"
+              className="px-3.5 py-2 bg-white text-gray-700 hover:bg-gray-50 rounded-lg text-sm font-semibold flex items-center gap-2 border border-gray-200 shadow-sm transition-colors"
             >
               <FileDown size={16} />
               Exporter CSV
             </button>
             <button
               onClick={handleClearAll}
-              className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-sm font-bold flex items-center gap-1.5 border border-red-200 transition-colors"
+              className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-sm font-bold flex items-center gap-1.5 border border-red-200 transition-colors"
               title="Supprimer définitivement toutes les données pour ré-importer vos fichiers"
             >
               <Trash2 size={16} />
               Vider la base
             </button>
           </div>
+        </div>
+
+        {/* PROFILE SELECTOR BANNER FOR TEAM COLLABORATION */}
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200/80 mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold shadow-xs">
+                <Users size={19} />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                  Espace de Travail par Profil & Collaborateur
+                  <span className="px-2 py-0.5 text-[10px] bg-emerald-100 text-emerald-800 font-extrabold rounded-full flex items-center gap-1">
+                    <ShieldCheck size={11} /> Données Séparées
+                  </span>
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Sélectionnez un membre de l'équipe pour gérer ses prospects et ses campagnes en toute indépendance.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsAddProfileModalOpen(true)}
+              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+            >
+              <UserPlus size={15} />
+              Nouveau membre
+            </button>
+          </div>
+
+          {/* Profile Tabs */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
+            {profiles.map(p => {
+              const isActive = activeProfileId === p.id;
+              const count = profileCounts[p.id] || 0;
+              
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setActiveProfileId(p.id)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+                    isActive
+                      ? 'bg-bde-navy text-white border-bde-navy shadow-md ring-2 ring-indigo-200 scale-[1.02]'
+                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  <span className="text-sm">{p.avatarEmoji || '👤'}</span>
+                  <span>{p.name}</span>
+                  <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setActiveProfileId('all')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+                activeProfileId === 'all'
+                  ? 'bg-slate-800 text-white border-slate-800 shadow-md ring-2 ring-slate-300 scale-[1.02]'
+                  : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+              }`}
+            >
+              <Building2 size={14} />
+              <span>Vue globale (Tous)</span>
+              <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+                activeProfileId === 'all' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+              }`}>
+                {profileCounts['all'] || 0}
+              </span>
+            </button>
+          </div>
+
+          {/* Active profile prompt */}
+          {activeProfileId !== 'all' && (
+            <div className="mt-3 p-2.5 bg-indigo-50/70 rounded-xl border border-indigo-100 flex items-center justify-between text-xs text-indigo-900">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-indigo-600 shrink-0 animate-pulse" />
+                <span>
+                  Vous êtes sur le profil de <strong className="font-bold underline">{profiles.find(p => p.id === activeProfileId)?.senderName || profiles.find(p => p.id === activeProfileId)?.name}</strong>. Les prospects ajoutés, importés ou modifiés ici sont isolés pour ce profil.
+                </span>
+              </div>
+              <span className="hidden sm:inline-block px-2.5 py-1 bg-indigo-100 text-indigo-800 rounded-lg font-bold text-[11px] shrink-0">
+                {profileCounts[activeProfileId] || 0} contact(s)
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Temporary success notification banner */}
@@ -1073,73 +1295,6 @@ const AdminProspects = () => {
           </div>
         )}
 
-        {/* Primary Database Category Selector Tabs */}
-        <div className="bg-white p-3.5 rounded-2xl shadow-sm border border-gray-200/80 mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                setCategoryFilter('sheets');
-                setImportMode('standard');
-              }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                categoryFilter === 'sheets'
-                  ? 'bg-bde-navy text-white shadow-md ring-2 ring-slate-400'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <FileText size={16} />
-              Catégorie 1 : 1er Google Sheets
-              <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
-                categoryFilter === 'sheets' ? 'bg-white text-bde-navy' : 'bg-gray-200 text-gray-800'
-              }`}>
-                {sheetsStats.total}
-              </span>
-            </button>
-
-            <button
-              onClick={() => {
-                setCategoryFilter('descartes');
-                setImportMode('descartes_pdf');
-              }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                categoryFilter === 'descartes'
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-md ring-2 ring-indigo-300'
-                  : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
-              }`}
-            >
-              <GraduationCap size={16} className={categoryFilter === 'descartes' ? 'text-yellow-300' : 'text-indigo-600'} />
-              Catégorie 2 : Lycée International Descartes
-              <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
-                categoryFilter === 'descartes' ? 'bg-white text-indigo-900' : 'bg-indigo-200 text-indigo-800'
-              }`}>
-                {descartesStats.total}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setCategoryFilter('all')}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                categoryFilter === 'all'
-                  ? 'bg-gray-800 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <Building2 size={15} />
-              Toutes les catégories ({stats.total})
-            </button>
-          </div>
-
-          {prospects.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors"
-            >
-              <Trash2 size={14} />
-              Effacer tout
-            </button>
-          )}
-        </div>
-
         {/* Campaign Metrics Section */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3">
@@ -1148,7 +1303,7 @@ const AdminProspects = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500 font-medium">Total Prospects</p>
-              <h3 className="text-lg font-bold text-gray-800">{stats.total}</h3>
+              <h3 className="text-lg font-bold text-gray-800">{activeStats.total}</h3>
             </div>
           </div>
 
@@ -1158,7 +1313,7 @@ const AdminProspects = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500 font-medium">À faire</p>
-              <h3 className="text-lg font-bold text-gray-800">{stats.toDo}</h3>
+              <h3 className="text-lg font-bold text-gray-800">{activeStats.toDo}</h3>
             </div>
           </div>
 
@@ -1168,7 +1323,7 @@ const AdminProspects = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500 font-medium">En cours</p>
-              <h3 className="text-lg font-bold text-gray-800">{stats.inProgress}</h3>
+              <h3 className="text-lg font-bold text-gray-800">{activeStats.inProgress}</h3>
             </div>
           </div>
 
@@ -1178,22 +1333,22 @@ const AdminProspects = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500 font-medium">Envoyés</p>
-              <h3 className="text-lg font-bold text-gray-800 text-emerald-600">{stats.sent}</h3>
+              <h3 className="text-lg font-bold text-gray-800 text-emerald-600">{activeStats.sent}</h3>
             </div>
           </div>
 
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 col-span-2 md:col-span-1">
             <div className="flex justify-between items-center mb-1">
               <p className="text-xs text-gray-500 font-medium">Progression</p>
-              <span className="text-xs font-bold text-bde-rose">{stats.progressPercent}%</span>
+              <span className="text-xs font-bold text-bde-rose">{activeStats.progressPercent}%</span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-2">
               <div 
                 className="bg-bde-rose h-2 rounded-full transition-all duration-500" 
-                style={{ width: `${stats.progressPercent}%` }}
+                style={{ width: `${activeStats.progressPercent}%` }}
               ></div>
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">{stats.sent} sur {stats.total} complétés</p>
+            <p className="text-[10px] text-gray-400 mt-1">{activeStats.sent} sur {activeStats.total} complétés</p>
           </div>
         </div>
 
@@ -1525,96 +1680,90 @@ const AdminProspects = () => {
           </div>
 
           {/* Right Panel: Prospects List & Campaign Controls (7 Cols) */}
-          <div className="lg:col-span-7 space-y-6">
+          <div className="lg:col-span-7 space-y-4">
             
-            {/* School Selector Tabs (Filtre Établissements) */}
-            <div className="bg-white p-2.5 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setSchoolFilter('all')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                  schoolFilter === 'all'
-                    ? 'bg-bde-navy text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <Building2 size={15} />
-                Tous les établissements ({stats.total})
-              </button>
+            {/* Category Tabs directly linked to Contacts and Campaign Table */}
+            <div className="bg-white p-2.5 rounded-2xl shadow-sm border border-gray-200/80 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    setCategoryFilter('sheets');
+                    setImportMode('standard');
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                    categoryFilter === 'sheets'
+                      ? 'bg-bde-navy text-white shadow-md ring-2 ring-slate-400'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <FileText size={15} />
+                  Catégorie 1 : 1er Google Sheet
+                  <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+                    categoryFilter === 'sheets' ? 'bg-white text-bde-navy' : 'bg-gray-200 text-gray-800'
+                  }`}>
+                    {sheetsStats.total}
+                  </span>
+                </button>
 
-              <button
-                onClick={() => setSchoolFilter('descartes')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                  schoolFilter === 'descartes'
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-md ring-2 ring-indigo-300'
-                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
-                }`}
-              >
-                <GraduationCap size={16} className={schoolFilter === 'descartes' ? 'text-yellow-300' : 'text-indigo-600'} />
-                Lycée Int. Descartes
-                <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
-                  schoolFilter === 'descartes' ? 'bg-white text-indigo-900' : 'bg-indigo-200 text-indigo-800'
-                }`}>
-                  {descartesStats.total}
-                </span>
-              </button>
+                <button
+                  onClick={() => {
+                    setCategoryFilter('descartes');
+                    setImportMode('descartes_pdf');
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                    categoryFilter === 'descartes'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-md ring-2 ring-indigo-300'
+                      : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
+                  }`}
+                >
+                  <GraduationCap size={15} className={categoryFilter === 'descartes' ? 'text-yellow-300' : 'text-indigo-600'} />
+                  Catégorie 2 : Lycée International Descartes
+                  <span className={`px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+                    categoryFilter === 'descartes' ? 'bg-white text-indigo-900' : 'bg-indigo-200 text-indigo-800'
+                  }`}>
+                    {descartesStats.total}
+                  </span>
+                </button>
 
-              <button
-                onClick={() => setSchoolFilter('other')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                  schoolFilter === 'other'
-                    ? 'bg-bde-navy text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                Autres ({stats.total - descartesStats.total})
-              </button>
-            </div>
-
-            {/* Dedicated Descartes Spécial Banner */}
-            {schoolFilter === 'descartes' && (
-              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white p-5 rounded-2xl border border-indigo-500/40 shadow-lg relative overflow-hidden animate-fade-in">
-                <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
-                  <GraduationCap size={130} className="text-indigo-200" />
-                </div>
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2.5 py-0.5 bg-yellow-400/20 text-yellow-300 text-[10px] font-extrabold uppercase tracking-wider rounded-full border border-yellow-400/30 flex items-center gap-1">
-                        <Award size={12} /> Section Spéciale Lycée Descartes
-                      </span>
-                    </div>
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      Prospects & Relances Lycée International Descartes
-                    </h3>
-                    <p className="text-xs text-indigo-200/90 mt-1">
-                      {descartesStats.total} prospects • {descartesStats.toDo + descartesStats.inProgress} à relancer • {descartesStats.sent} messages envoyés ({descartesStats.progressPercent}%)
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 shrink-0">
-                    <button
-                      onClick={() => {
-                        setImportMode('descartes_pdf');
-                        setIsPasteOpen(true);
-                      }}
-                      className="px-3.5 py-2 bg-indigo-900/80 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl shadow-sm border border-indigo-500/50 flex items-center gap-1.5 transition-all"
-                    >
-                      <FileText size={13} className="text-yellow-300" />
-                      Importer PDF Descartes
-                    </button>
-
-                    <button
-                      onClick={() => startCampaignFlow(true)}
-                      disabled={descartesStats.toDo + descartesStats.inProgress === 0}
-                      className="px-3.5 py-2 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-slate-950 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all disabled:opacity-50"
-                    >
-                      <Play size={13} fill="currentColor" />
-                      Lancer Relances Descartes ({descartesStats.toDo + descartesStats.inProgress})
-                    </button>
-                  </div>
-                </div>
+                <button
+                  onClick={() => setCategoryFilter('all')}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    categoryFilter === 'all'
+                      ? 'bg-gray-800 text-white shadow-sm'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <Building2 size={14} />
+                  Toutes les catégories ({stats.total})
+                </button>
               </div>
-            )}
+
+              {categoryFilter === 'descartes' && (
+                <button
+                  onClick={() => {
+                    setImportMode('descartes_pdf');
+                    setIsPasteOpen(true);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                >
+                  <Clipboard size={14} />
+                  Importer PDF Descartes
+                </button>
+              )}
+
+              {categoryFilter === 'sheets' && (
+                <button
+                  onClick={() => {
+                    setImportMode('standard');
+                    setIsPasteOpen(true);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                >
+                  <Clipboard size={14} />
+                  Importer 1er Google Sheet
+                </button>
+              )}
+            </div>
 
             {/* Campaign Control Toolbar & Contacts Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -1624,24 +1773,33 @@ const AdminProspects = () => {
                   <div>
                     <h2 className="font-bold text-gray-800 text-lg flex items-center gap-2">
                       <TrendingUp className="text-bde-rose" size={20} />
-                      3. Contacts & Gestion de Campagne
+                      Contacts & Gestion de Campagne
                     </h2>
-                    <p className="text-xs text-gray-500">Sélectionnez, modifiez et lancez vos messages</p>
+                    <p className="text-xs text-gray-500">
+                      {categoryFilter === 'sheets' && "Base active : 1er Google Sheet"}
+                      {categoryFilter === 'descartes' && "Base active : Lycée International Descartes"}
+                      {categoryFilter === 'all' && "Base globale : Toutes les catégories"}
+                    </p>
                   </div>
 
                   <div className="flex gap-2 w-full sm:w-auto">
                     <button
-                      onClick={startCampaignFlow}
-                      disabled={prospects.filter(p => p.status === 'to_do' || p.status === 'in_progress').length === 0}
-                      className="px-4 py-2 bg-bde-rose hover:bg-opacity-90 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-rose-100 transition-all cursor-pointer"
+                      onClick={() => startCampaignFlow(categoryFilter === 'descartes')}
+                      disabled={filteredProspects.filter(p => p.status === 'to_do' || p.status === 'in_progress').length === 0}
+                      className={`px-4 py-2 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer disabled:bg-gray-200 disabled:text-gray-400 ${
+                        categoryFilter === 'descartes'
+                          ? 'bg-indigo-700 hover:bg-indigo-800 shadow-indigo-100'
+                          : 'bg-bde-rose hover:bg-opacity-90 shadow-rose-100'
+                      }`}
                     >
                       <Play size={14} fill="currentColor" />
-                      Lancer la Campagne
+                      {categoryFilter === 'descartes' ? 'Lancer Relances Descartes' : 'Lancer la Campagne'}
+                      ({filteredProspects.filter(p => p.status === 'to_do' || p.status === 'in_progress').length})
                     </button>
                     
                     <button
                       onClick={openAddModal}
-                      className="px-3 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm transition-colors"
+                      className="px-3 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm transition-colors shrink-0"
                     >
                       <Plus size={14} />
                       Ajouter contact
@@ -1820,6 +1978,12 @@ const AdminProspects = () => {
                                 <p className="font-bold text-gray-900 text-sm">
                                   {reg.firstName} {reg.lastName}
                                 </p>
+                                {activeProfileId === 'all' && (
+                                  <span className="px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-800 text-[9px] font-bold rounded-md flex items-center gap-1 shrink-0" title={`Appartient à ${profiles.find(p => p.id === (reg.profileId || 'mehdi'))?.name}`}>
+                                    <span>{profiles.find(p => p.id === (reg.profileId || 'mehdi'))?.avatarEmoji || '👤'}</span>
+                                    <span>{profiles.find(p => p.id === (reg.profileId || 'mehdi'))?.name || 'Mehdi'}</span>
+                                  </span>
+                                )}
                                 {isDescartesProspect(reg) && (
                                   <span className="px-1.5 py-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[9px] font-extrabold rounded-md shadow-2xs flex items-center gap-0.5 shrink-0" title="Prospect du Lycée International Descartes">
                                     <GraduationCap size={10} className="text-yellow-300" /> Descartes
@@ -2158,6 +2322,21 @@ const AdminProspects = () => {
               </div>
 
               <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Attribué au Profil / Collaborateur</label>
+                <select 
+                  value={formProspect.profileId || (activeProfileId === 'all' ? 'mehdi' : activeProfileId)}
+                  onChange={e => setFormProspect({...formProspect, profileId: e.target.value})}
+                  className="w-full p-2.5 border border-gray-200 rounded-xl text-sm focus:ring-1 focus:ring-bde-rose outline-none bg-white font-medium"
+                >
+                  {profiles.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.avatarEmoji || '👤'} {p.name} ({p.senderName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Statut</label>
                 <select 
                   value={formProspect.status || 'to_do'}
@@ -2218,6 +2397,98 @@ const AdminProspects = () => {
                   className="flex-1 px-4 py-2.5 bg-bde-rose hover:bg-opacity-90 text-white rounded-xl text-sm font-semibold transition-opacity"
                 >
                   Enregistrer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Create New Profile Modal */}
+      {isAddProfileModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsAddProfileModalOpen(false)}
+              className="absolute right-4 top-4 p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+            >
+              <X size={18} />
+            </button>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold">
+                <UserPlus size={18} />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800">Ajouter un nouveau membre</h2>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Chaque membre aura sa propre base de prospects isolée dans la catégorie WhatsApp Relancer.
+            </p>
+
+            <form onSubmit={handleAddProfile} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Prénom / Nom du membre *</label>
+                <input
+                  type="text"
+                  required
+                  value={newProfileName}
+                  onChange={e => setNewProfileName(e.target.value)}
+                  placeholder="Ex: Emmanuelle, Nour, Joshua, Othniel..."
+                  className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Nom d'expéditeur (dans le message)</label>
+                <input
+                  type="text"
+                  value={newProfileSender}
+                  onChange={e => setNewProfileSender(e.target.value)}
+                  placeholder="Ex: Emmanuelle (ou laissez vide)"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Sera utilisé pour remplacer {"{expediteur}"} et personnaliser les relances.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Rôle</label>
+                  <input
+                    type="text"
+                    value={newProfileRole}
+                    onChange={e => setNewProfileRole(e.target.value)}
+                    placeholder="Ex: Relanceur"
+                    className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Émojis Avatar</label>
+                  <select
+                    value={newProfileEmoji}
+                    onChange={e => setNewProfileEmoji(e.target.value)}
+                    className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="👤">👤 Défaut</option>
+                    <option value="🌸">🌸 Emmanuelle</option>
+                    <option value="⚡">⚡ Nour</option>
+                    <option value="🚀">🚀 Joshua</option>
+                    <option value="🌟">🌟 Othniel</option>
+                    <option value="🎯">🎯 Membre</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-gray-100 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsAddProfileModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md"
+                >
+                  Créer le profil
                 </button>
               </div>
             </form>

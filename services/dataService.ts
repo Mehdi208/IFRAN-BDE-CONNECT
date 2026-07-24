@@ -516,6 +516,29 @@ export const dataService = {
     }
     return [];
   },
+  deleteProspectsByProfile: async (profileId: string) => {
+    const userId = auth.currentUser?.uid;
+    const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
+    const updated = curr.filter(x => (x.profileId || 'mehdi') !== profileId);
+    saveToStorage('prospect_contacts', updated);
+
+    if (db) {
+      try {
+        const q = query(collection(db, 'prospect_contacts'), where('profileId', '==', profileId));
+        const snapshot = await getDocs(q);
+        const docsToDelete = snapshot.docs;
+        for (let i = 0; i < docsToDelete.length; i += 400) {
+          const deleteBatch = writeBatch(db);
+          const chunk = docsToDelete.slice(i, i + 400);
+          chunk.forEach(d => deleteBatch.delete(d.ref));
+          await deleteBatch.commit();
+        }
+      } catch (error) {
+        console.warn("Error deleting prospects by profile in Firestore:", error);
+      }
+    }
+    return updated;
+  },
   saveProspectsBulk: async (contacts: ProspectContact[]) => {
     const userId = auth.currentUser?.uid;
     // Always sync with localStorage immediately so state is never lost
