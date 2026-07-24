@@ -23,6 +23,7 @@ import {
   Sparkles, 
   Check, 
   Info, 
+  ChevronLeft,
   ChevronRight, 
   AlertCircle,
   TrendingUp,
@@ -642,12 +643,22 @@ const AdminProspects = () => {
           } as ProspectContact);
         });
       } else {
-        newList = parsed.map(p => ({
+        // Replace only contacts belonging to the targeted profile and targeted category
+        const existingToKeep = prospects.filter(p => {
+          const matchesProfile = (p.profileId || 'mehdi') === targetProfile;
+          const matchesCategory = targetCategory === 'descartes' ? isDescartesProspect(p) : !isDescartesProspect(p);
+          const isTargetForReplacement = matchesProfile && matchesCategory;
+          return !isTargetForReplacement;
+        });
+
+        const newContacts = parsed.map(p => ({
           ...p,
-          profileId: p.profileId || targetProfile,
+          profileId: targetProfile,
           category: targetCategory,
           id: 'local_' + Math.random().toString(36).substr(2, 9)
         } as ProspectContact));
+
+        newList = [...existingToKeep, ...newContacts];
       }
 
       const updated = await dataService.saveProspectsBulk(newList);
@@ -680,27 +691,45 @@ const AdminProspects = () => {
 
   const handleClearAll = async () => {
     const currentProfileObj = profiles.find(pr => pr.id === activeProfileId);
-    const profileName = currentProfileObj ? currentProfileObj.name : 'actuel';
+    const profileName = currentProfileObj ? currentProfileObj.name : 'Tous les profils';
 
-    let confirmMsg = `⚠️ Attention : Voulez-vous vraiment supprimer TOUS les contacts du profil "${profileName}" ?`;
-    if (activeProfileId === 'all') {
-      confirmMsg = "⚠️ Attention : Voulez-vous vraiment supprimer TOUS les contacts de TOUS les profils (Mehdi, Emmanuelle, Nour, Joshua, Othniel...) ?";
-    } else {
-      confirmMsg += "\n\nCette action supprimera uniquement vos données sans altérer les bases de vos collaborateurs.";
+    const categoryName = 
+      categoryFilter === 'sheets' ? '1er Google Sheet' :
+      categoryFilter === 'descartes' ? 'Liste des Fiches / Descartes' :
+      'Toutes les bases';
+
+    let confirmMsg = `⚠️ Attention : Voulez-vous vraiment supprimer les contacts de la base "${categoryName}" pour le profil "${profileName}" ?`;
+    if (activeProfileId === 'all' && categoryFilter === 'all') {
+      confirmMsg = "⚠️ Attention : Voulez-vous vraiment supprimer TOUS les contacts de TOUTES les bases et de TOUS les profils ?";
+    } else if (activeProfileId === 'all') {
+      confirmMsg = `⚠️ Attention : Voulez-vous vraiment supprimer les contacts de la base "${categoryName}" pour TOUS les profils ?`;
+    } else if (categoryFilter === 'all') {
+      confirmMsg = `⚠️ Attention : Voulez-vous vraiment supprimer TOUS les contacts (toutes bases fondues) du profil "${profileName}" ?`;
     }
+
+    confirmMsg += "\n\n(Les contacts des autres catégories et des autres profils resteront intacts).";
 
     if (window.confirm(confirmMsg)) {
       try {
-        if (activeProfileId === 'all') {
-          const updated = await dataService.deleteAllProspects();
-          setProspects(updated);
-        } else {
-          const updated = await dataService.deleteProspectsByProfile(activeProfileId);
-          setProspects(updated);
+        const contactsToKeep = prospects.filter(p => {
+          const matchesProfile = activeProfileId === 'all' || (p.profileId || 'mehdi') === activeProfileId;
+          const matchesCategory = 
+            categoryFilter === 'all' ||
+            (categoryFilter === 'descartes' ? isDescartesProspect(p) : !isDescartesProspect(p));
+
+          const isTargetForDeletion = matchesProfile && matchesCategory;
+          return !isTargetForDeletion;
+        });
+
+        const updated = await dataService.saveProspectsBulk(contactsToKeep);
+        const finalProspects = (updated && Array.isArray(updated)) ? updated : contactsToKeep;
+        setProspects(finalProspects);
+
+        if (activeContactId && !finalProspects.some(p => p.id === activeContactId)) {
+          setActiveContactId(finalProspects.length > 0 ? finalProspects[0].id : null);
         }
-        setActiveContactId(null);
         setSelectedIds([]);
-        showTemporarySuccess(`Les contacts du profil "${profileName}" ont été supprimés avec succès.`);
+        showTemporarySuccess(`Base "${categoryName}" (${profileName}) vidée avec succès.`);
       } catch (e) {
         alert("Erreur lors de la réinitialisation de la base de données.");
       }
@@ -905,6 +934,12 @@ const AdminProspects = () => {
     setCampaignList(list);
     setCurrentCampaignIndex(0);
     setCampaignMode(true);
+  };
+
+  const prevCampaignContact = () => {
+    if (currentCampaignIndex > 0) {
+      setCurrentCampaignIndex(prev => prev - 1);
+    }
   };
 
   const nextCampaignContact = async (markCurrentStatus?: 'sent' | 'ignored') => {
@@ -1293,7 +1328,18 @@ const AdminProspects = () => {
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={prevCampaignContact}
+                  disabled={currentCampaignIndex === 0}
+                  className="px-3.5 py-3 bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold flex items-center gap-1.5 transition-all border border-white/20 shadow-sm"
+                  title="Revenir au contact précédent"
+                >
+                  <ChevronLeft size={18} />
+                  Précédent
+                </button>
+
                 <button
                   onClick={() => handleCampaignSend(currentCampaignContact, 'jeune')}
                   className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition-colors"
