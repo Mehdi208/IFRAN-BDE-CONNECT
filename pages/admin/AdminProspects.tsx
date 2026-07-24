@@ -31,6 +31,7 @@ import {
   Building2,
   Award,
   FileText,
+  Printer,
   Users,
   User,
   UserPlus,
@@ -95,7 +96,8 @@ const AdminProspects = () => {
   const [isBulkImporting, setIsBulkImporting] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [isPasteOpen, setIsPasteOpen] = useState(false);
-  const [importMode, setImportMode] = useState<'standard' | 'descartes_pdf'>('standard');
+  const [pasteTargetCategory, setPasteTargetCategory] = useState<'sheets' | 'descartes'>('sheets');
+  const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
   const [importError, setImportError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -610,26 +612,24 @@ const AdminProspects = () => {
   const handlePasteImport = async () => {
     setImportError('');
     if (!pasteText.trim()) {
-      setImportError("Veuillez coller du texte d'abord.");
+      setImportError("Veuillez coller des données copiées depuis Excel ou Google Sheets.");
       return;
     }
 
     try {
-      const parsed = importMode === 'descartes_pdf' 
-        ? parseDescartesPdfText(pasteText) 
-        : parseImportedText(pasteText);
+      const parsed = parseImportedText(pasteText);
 
       if (parsed.length === 0) {
-        setImportError("Aucun contact valide détecté. Vérifiez le format.");
+        setImportError("Aucun contact valide n'a été détecté. Assurez-vous de coller des lignes directement depuis Excel ou Google Sheets.");
         return;
       }
 
-      const defaultCategory = importMode === 'descartes_pdf' ? 'descartes' : (categoryFilter === 'descartes' ? 'descartes' : 'sheets');
+      const targetCategory = pasteTargetCategory;
+      const targetProfile = activeProfileId === 'all' ? 'mehdi' : activeProfileId;
 
       const merge = window.confirm(`Détecté ${parsed.length} contacts. Souhaitez-vous AJOUTER ces contacts à la liste existante ?\n(Cliquez sur "Annuler" pour REMPLACER la liste actuelle)`);
       
       let newList: ProspectContact[];
-      const targetProfile = activeProfileId === 'all' ? 'mehdi' : activeProfileId;
 
       if (merge) {
         newList = [...prospects];
@@ -637,7 +637,7 @@ const AdminProspects = () => {
           newList.push({
             ...p,
             profileId: p.profileId || targetProfile,
-            category: p.category || defaultCategory,
+            category: targetCategory,
             id: 'local_' + Math.random().toString(36).substr(2, 9)
           } as ProspectContact);
         });
@@ -645,7 +645,7 @@ const AdminProspects = () => {
         newList = parsed.map(p => ({
           ...p,
           profileId: p.profileId || targetProfile,
-          category: p.category || defaultCategory,
+          category: targetCategory,
           id: 'local_' + Math.random().toString(36).substr(2, 9)
         } as ProspectContact));
       }
@@ -658,69 +658,10 @@ const AdminProspects = () => {
       if (finalProspects.length > 0) {
         setActiveContactId(finalProspects[0].id);
       }
-      showTemporarySuccess(`Importation réussie : ${parsed.length} contacts synchronisés pour le profil !`);
+      showTemporarySuccess(`Importation Excel/Google Sheet réussie : ${parsed.length} contacts importés avec succès !`);
     } catch (e) {
       setImportError("Une erreur est survenue lors de l'importation.");
     }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setImportError('');
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target?.result as string;
-      if (!text) return;
-
-      try {
-        const parsed = importMode === 'descartes_pdf' 
-          ? parseDescartesPdfText(text) 
-          : parseImportedText(text);
-
-        if (parsed.length === 0) {
-          setImportError("Aucun contact valide détecté dans le fichier.");
-          return;
-        }
-
-        const defaultCategory = importMode === 'descartes_pdf' ? 'descartes' : (categoryFilter === 'descartes' ? 'descartes' : 'sheets');
-        const targetProfile = activeProfileId === 'all' ? 'mehdi' : activeProfileId;
-
-        const merge = window.confirm(`Détecté ${parsed.length} contacts. Souhaitez-vous AJOUTER ces contacts à la liste existante ?\n(Cliquez sur "Annuler" pour REMPLACER la liste actuelle)`);
-        
-        let newList: ProspectContact[];
-        if (merge) {
-          newList = [...prospects];
-          parsed.forEach(p => {
-            newList.push({
-              ...p,
-              profileId: p.profileId || targetProfile,
-              category: p.category || defaultCategory,
-              id: 'local_' + Math.random().toString(36).substr(2, 9)
-            } as ProspectContact);
-          });
-        } else {
-          newList = parsed.map(p => ({
-            ...p,
-            profileId: p.profileId || targetProfile,
-            category: p.category || defaultCategory,
-            id: 'local_' + Math.random().toString(36).substr(2, 9)
-          } as ProspectContact));
-        }
-
-        const updated = await dataService.saveProspectsBulk(newList);
-        const finalProspects = (updated && updated.length > 0) ? updated : newList;
-        setProspects(finalProspects);
-        if (finalProspects.length > 0) {
-          setActiveContactId(finalProspects[0].id);
-        }
-        showTemporarySuccess(`Importation réussie : ${parsed.length} contacts importés !`);
-      } catch (err) {
-        setImportError("Erreur lors de la lecture du fichier CSV.");
-      }
-    };
-    reader.readAsText(file);
   };
 
   const handleDelete = async (id: string) => {
@@ -948,10 +889,10 @@ const AdminProspects = () => {
   const currentCampaignContact = campaignList[currentCampaignIndex] || null;
 
   const startCampaignFlow = (descartesOnly = false) => {
-    const isDescartesFilterActive = descartesOnly || schoolFilter === 'descartes';
+    const isDescartesFilterActive = descartesOnly || categoryFilter === 'descartes';
     const sourceProspects = isDescartesFilterActive 
       ? profileProspects.filter(p => isDescartesProspect(p))
-      : (schoolFilter === 'other' ? profileProspects.filter(p => !isDescartesProspect(p)) : profileProspects);
+      : (categoryFilter === 'sheets' ? profileProspects.filter(p => !isDescartesProspect(p)) : profileProspects);
 
     const list = sourceProspects.filter(p => p.status === 'to_do' || p.status === 'in_progress');
     if (list.length === 0) {
@@ -1151,45 +1092,27 @@ const AdminProspects = () => {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => {
-                setImportMode('standard');
+                setPasteTargetCategory(categoryFilter === 'descartes' ? 'descartes' : 'sheets');
                 setIsPasteOpen(true);
               }}
-              className="px-3.5 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold flex items-center gap-2 border border-indigo-200 transition-colors"
+              className="px-3.5 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-sm font-bold flex items-center gap-2 border border-indigo-600 shadow-sm transition-all hover:scale-[1.01]"
             >
               <Clipboard size={16} />
-              Coller Excel / 1er Google Sheet
+              Coller Excel / Google Sheet
             </button>
+
             <button
-              onClick={() => {
-                setImportMode('descartes_pdf');
-                setIsPasteOpen(true);
-              }}
-              className="px-3.5 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-semibold flex items-center gap-2 border border-blue-200 transition-colors"
+              onClick={() => setIsPdfPreviewOpen(true)}
+              className="px-3.5 py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-xl text-sm font-bold flex items-center gap-2 border border-gray-300 shadow-sm transition-colors"
             >
-              <GraduationCap size={16} className="text-blue-600" />
-              Coller PDF Lycée Descartes
+              <Printer size={16} className="text-indigo-600" />
+              Exporter PDF (Aperçu du travail)
             </button>
-            <label className="px-3.5 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-semibold flex items-center gap-2 border border-emerald-200 cursor-pointer transition-colors">
-              <UploadCloud size={16} />
-              Importer CSV
-              <input 
-                type="file" 
-                accept=".csv,.txt" 
-                onChange={handleFileUpload} 
-                className="hidden" 
-              />
-            </label>
-            <button
-              onClick={handleExportCSV}
-              className="px-3.5 py-2 bg-white text-gray-700 hover:bg-gray-50 rounded-lg text-sm font-semibold flex items-center gap-2 border border-gray-200 shadow-sm transition-colors"
-            >
-              <FileDown size={16} />
-              Exporter CSV
-            </button>
+
             <button
               onClick={handleClearAll}
-              className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-sm font-bold flex items-center gap-1.5 border border-red-200 transition-colors"
-              title="Supprimer définitivement toutes les données pour ré-importer vos fichiers"
+              className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-sm font-bold flex items-center gap-1.5 border border-red-200 transition-colors"
+              title="Supprimer définitivement les données du profil actif"
             >
               <Trash2 size={16} />
               Vider la base
@@ -2141,59 +2064,60 @@ const AdminProspects = () => {
 
       </div>
 
-      {/* Paste Excel/Sheets Cells / PDF Descartes Modal Box */}
+      {/* Paste Excel/Sheets Modal */}
       {isPasteOpen && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl">
-            {/* Import Mode Tabs */}
-            <div className="flex border-b border-gray-200 mb-4 pb-1">
-              <button
-                type="button"
-                onClick={() => setImportMode('standard')}
-                className={`flex-1 py-2 text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
-                  importMode === 'standard'
-                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
-                    : 'border-transparent text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                <Clipboard size={14} />
-                Excel / Sheets Standard
-              </button>
-              <button
-                type="button"
-                onClick={() => setImportMode('descartes_pdf')}
-                className={`flex-1 py-2 text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 ${
-                  importMode === 'descartes_pdf'
-                    ? 'border-yellow-500 text-indigo-950 bg-amber-50/80 rounded-t-lg'
-                    : 'border-transparent text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                <GraduationCap size={15} className="text-amber-500" />
-                PDF Lycée Descartes (3 éléments)
-              </button>
+          <div className="bg-white rounded-2xl w-full max-w-xl p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsPasteOpen(false)}
+              className="absolute right-4 top-4 p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold">
+                <Clipboard size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">Coller des données Excel / Google Sheet</h2>
+                <p className="text-xs text-gray-500">Copiez des lignes directement depuis votre tableur Excel ou Google Sheets</p>
+              </div>
             </div>
 
-            {importMode === 'descartes_pdf' ? (
-              <div className="mb-3">
-                <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-900 text-xs font-medium space-y-1">
-                  <div className="font-bold text-amber-950 flex items-center gap-1.5">
-                    <Sparkles size={14} className="text-amber-600" />
-                    Extraction Spéciale Document PDF Lycée Descartes
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-amber-800">
-                    Seuls le <strong>Nom</strong>, le <strong>Prénom</strong> et le <strong>Numéro de téléphone</strong> seront identifiés et conservés pour chaque ligne. Toutes les autres informations du PDF seront automatiquement ignorées.
-                  </p>
-                </div>
+            <div className="mt-4 mb-4">
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">Destination / Base de données cible :</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPasteTargetCategory('sheets')}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 ${
+                    pasteTargetCategory === 'sheets'
+                      ? 'bg-bde-navy text-white border-bde-navy shadow-sm'
+                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  <FileText size={15} />
+                  1er Google Sheet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPasteTargetCategory('descartes')}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-2 ${
+                    pasteTargetCategory === 'descartes'
+                      ? 'bg-indigo-700 text-white border-indigo-700 shadow-sm'
+                      : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                  }`}
+                >
+                  <GraduationCap size={15} />
+                  Liste des Fiches / Descartes
+                </button>
               </div>
-            ) : (
-              <p className="text-xs text-gray-500 mb-4">
-                Copiez directement vos lignes/colonnes depuis Excel ou Google Sheets (Nom et prénom, Classe, École de provenance, Tél. jeune, Tél. parent, Filière souhaitée) et collez-les dans la zone ci-dessous.
-              </p>
-            )}
+            </div>
 
             {importError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg mb-4 text-xs font-semibold flex items-center gap-1.5">
-                <AlertCircle size={14} />
+              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl mb-4 text-xs font-semibold flex items-center gap-1.5">
+                <AlertCircle size={15} />
                 {importError}
               </div>
             )}
@@ -2203,11 +2127,7 @@ const AdminProspects = () => {
                 rows={8}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
-                placeholder={
-                  importMode === 'descartes_pdf'
-                    ? "Collez ici le texte copié depuis le document PDF du Lycée International Descartes...\nExemple :\nTRAORE Méhdi  0708091011  m.traore@descartes.ci\nDIALLO Fatou  0501020304  Terminal A  Inscrite"
-                    : "Exemple de format collé :\nJean Dupont\tTerminale D\tLycée Classique\t0102030405\t0505050505\tInformatique"
-                }
+                placeholder="Collez vos lignes/colonnes copiées depuis Excel ou Google Sheets ici...\n\nExemple de format collé :\nDupont\tJean\tTerminale D\t0102030405\t0505050505\tInformatique\nDiallo\tFatou\tTerminale A\t0708091011\t\tGestion"
                 className="w-full p-3 border border-gray-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-gray-50 focus:bg-white resize-none leading-relaxed"
               />
 
@@ -2226,15 +2146,192 @@ const AdminProspects = () => {
                 <button 
                   type="button"
                   onClick={handlePasteImport}
-                  className={`flex-1 px-4 py-2.5 text-white rounded-xl text-xs font-bold transition-all shadow-sm ${
-                    importMode === 'descartes_pdf'
-                      ? 'bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-slate-950'
-                      : 'bg-indigo-600 hover:bg-indigo-700'
-                  }`}
+                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2"
                 >
-                  {importMode === 'descartes_pdf' ? 'Extraire Nom, Prénom & Tél' : 'Analyser et Importer'}
+                  <CheckCircle2 size={16} />
+                  Analyser et Importer les contacts
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Exporter PDF (Aperçu du travail) */}
+      {isPdfPreviewOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-md flex items-center justify-center p-2 sm:p-6 overflow-y-auto animate-fade-in print:p-0 print:bg-white print:static">
+          <style>{`
+            @media print {
+              body * {
+                visibility: hidden !important;
+              }
+              #printable-report, #printable-report * {
+                visibility: visible !important;
+              }
+              #printable-report {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 20px !important;
+                background: white !important;
+                color: black !important;
+              }
+            }
+          `}</style>
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden print:max-h-none print:shadow-none print:w-full print:rounded-none">
+            
+            {/* Non-printable Modal Controls Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0 print:hidden">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold">Rapport d'Aperçu du Travail</h3>
+                  <p className="text-[11px] text-slate-400">Générez un PDF officiel pour la révision de votre campagne de relances</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all"
+                >
+                  <Printer size={15} />
+                  Imprimer / Enregistrer en PDF
+                </button>
+                <button
+                  onClick={() => setIsPdfPreviewOpen(false)}
+                  className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Area */}
+            <div id="printable-report" className="p-6 sm:p-8 overflow-y-auto space-y-6 print:p-0 print:overflow-visible">
+              {/* Document Letterhead */}
+              <div className="border-b-2 border-gray-900 pb-5 flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-indigo-900 font-extrabold text-xl">
+                    <Send size={22} className="text-indigo-600" />
+                    BDE - Prospection & Relances WhatsApp
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1 font-medium">Aperçu officiel de l'avancement du travail et statut des prospects</p>
+                </div>
+                <div className="text-right text-xs text-gray-600 space-y-0.5">
+                  <p className="font-bold text-gray-900">
+                    Profil : {profiles.find(p => p.id === activeProfileId)?.senderName || profiles.find(p => p.id === activeProfileId)?.name || 'Vue Globale (Tous)'}
+                  </p>
+                  <p>Date : {new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                  <p className="text-[11px] text-indigo-700 font-semibold">
+                    Base : {categoryFilter === 'sheets' ? '1er Google Sheet' : categoryFilter === 'descartes' ? 'Lycée International Descartes' : 'Toutes les bases'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Statistics Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                  <p className="text-[10px] font-bold text-gray-500 uppercase">Total Contacts</p>
+                  <p className="text-lg font-black text-gray-900">{activeStats.total}</p>
+                </div>
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <p className="text-[10px] font-bold text-amber-700 uppercase">À Faire</p>
+                  <p className="text-lg font-black text-amber-900">{activeStats.toDo}</p>
+                </div>
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase">Relancés / Envoyés</p>
+                  <p className="text-lg font-black text-emerald-900">{activeStats.sent}</p>
+                </div>
+                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                  <p className="text-[10px] font-bold text-indigo-700 uppercase">Taux d'Avancement</p>
+                  <p className="text-lg font-black text-indigo-900">{activeStats.progressPercent}%</p>
+                </div>
+              </div>
+
+              {/* Table of Prospects */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-3 flex items-center justify-between">
+                  <span>Liste des prospects ({filteredProspects.length})</span>
+                  <span className="text-[10px] font-normal text-gray-500">Document généré automatiquement</span>
+                </h4>
+
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-100 text-gray-700 font-bold border-b border-gray-200">
+                      <tr>
+                        <th className="p-2.5">#</th>
+                        <th className="p-2.5">Nom & Prénom</th>
+                        <th className="p-2.5">Téléphone</th>
+                        <th className="p-2.5">École / Provenance</th>
+                        <th className="p-2.5">Statut</th>
+                        <th className="p-2.5">Profil</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
+                      {filteredProspects.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-4 text-center text-gray-400">Aucun contact disponible dans ce filtre.</td>
+                        </tr>
+                      ) : (
+                        filteredProspects.map((p, idx) => {
+                          const prof = profiles.find(pr => pr.id === (p.profileId || 'mehdi'));
+                          const provenance = p.customFields?.['École de provenance'] || (isDescartesProspect(p) ? 'Lycée Descartes' : 'Non précisée');
+                          
+                          return (
+                            <tr key={p.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                              <td className="p-2.5 font-bold text-gray-400">{idx + 1}</td>
+                              <td className="p-2.5 font-bold text-gray-900">{p.firstName} {p.lastName}</td>
+                              <td className="p-2.5 font-mono text-gray-700">{p.phone}</td>
+                              <td className="p-2.5 text-gray-600">{provenance}</td>
+                              <td className="p-2.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                  p.status === 'sent' ? 'bg-emerald-100 text-emerald-800' :
+                                  p.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                                  p.status === 'ignored' ? 'bg-red-100 text-red-800' :
+                                  'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {p.status === 'sent' ? 'Relancé' :
+                                   p.status === 'in_progress' ? 'En cours' :
+                                   p.status === 'ignored' ? 'Ignoré' : 'À faire'}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-gray-500 font-semibold">{prof?.name || 'Mehdi'}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-4 border-t border-gray-200 text-center text-[11px] text-gray-400 flex items-center justify-between">
+                <span>Plateforme de Relances WhatsApp - BDE</span>
+                <span>Page 1 / 1</span>
+              </div>
+            </div>
+
+            {/* Non-printable Modal Footer Actions */}
+            <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between shrink-0 print:hidden">
+              <button
+                onClick={() => setIsPdfPreviewOpen(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-100"
+              >
+                Fermer
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md"
+              >
+                <Printer size={16} />
+                Imprimer / Télécharger en PDF
+              </button>
             </div>
           </div>
         </div>
