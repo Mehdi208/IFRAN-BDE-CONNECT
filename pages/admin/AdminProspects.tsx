@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 import { dataService } from '../../services/dataService';
 import { ProspectContact, RelancerProfile } from '../../types';
 import { 
@@ -1007,121 +1008,73 @@ const AdminProspects = () => {
     document.body.removeChild(link);
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (filteredProspects.length === 0) {
       alert("Aucun contact à exporter en PDF pour ce filtre.");
       return;
     }
 
+    let element = document.getElementById('printable-report');
+    let openedTemporarily = false;
+
+    if (!element) {
+      setIsPdfPreviewOpen(true);
+      openedTemporarily = true;
+      await new Promise(resolve => setTimeout(resolve, 350));
+      element = document.getElementById('printable-report');
+    }
+
+    if (!element) {
+      alert("Erreur lors de la préparation du document.");
+      return;
+    }
+
     try {
-      const doc = new jsPDF('p', 'mm', 'a4');
+      showTemporarySuccess("Génération de l'image & du PDF en cours...");
+
+      // Capture the exact preview element as a high-res image canvas
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: 1024
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
       const activeProfile = profiles.find(p => p.id === activeProfileId);
-      const profileName = activeProfile?.senderName || activeProfile?.name || 'Vue Globale (Tous)';
-      const baseName = categoryFilter === 'sheets' ? '1er Google Sheet' : categoryFilter === 'descartes' ? 'Lycée International Descartes' : 'Toutes les bases';
-      const currentDateStr = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
-
-      // Header
-      doc.setFontSize(15);
-      doc.setTextColor(30, 27, 75);
-      doc.setFont('helvetica', 'bold');
-      doc.text("BDE IFRAN - Prospection & Relances WhatsApp", 14, 18);
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 116, 139);
-      doc.text("Rapport d'avancement du travail et statut des prospects", 14, 24);
-
-      // Meta info right aligned
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(15, 23, 42);
-      doc.text(`Profil : ${profileName}`, 125, 18);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Date : ${currentDateStr}`, 125, 23);
-      doc.text(`Base : ${baseName}`, 125, 28);
-
-      // Line separator
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.5);
-      doc.line(14, 32, 196, 32);
-
-      // Stats Summary Box
-      doc.setFillColor(248, 250, 252);
-      doc.rect(14, 36, 182, 14, 'F');
-      doc.setDrawColor(203, 213, 225);
-      doc.rect(14, 36, 182, 14, 'S');
-
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(51, 65, 85);
-      doc.text(`TOTAL : ${activeStats.total}`, 18, 45);
-      doc.text(`À FAIRE : ${activeStats.toDo}`, 62, 45);
-      doc.text(`RELANCÉS : ${activeStats.sent}`, 108, 45);
-      doc.text(`AVANCEMENT : ${activeStats.progressPercent}%`, 152, 45);
-
-      // Table Rows
-      const tableRows = filteredProspects.map((p, idx) => {
-        const prof = profiles.find(pr => pr.id === (p.profileId || 'mehdi'));
-        const provenance = p.customFields?.['École de provenance'] || (isDescartesProspect(p) ? 'Lycée Descartes' : 'Non précisée');
-        const statusLabel = 
-          p.status === 'sent' ? 'Relancé' :
-          p.status === 'in_progress' ? 'En cours' :
-          p.status === 'ignored' ? 'Ignoré' : 'À faire';
-
-        return [
-          (idx + 1).toString(),
-          `${p.firstName} ${p.lastName}`.trim(),
-          p.phone || '-',
-          provenance,
-          statusLabel,
-          prof?.name || 'Mehdi'
-        ];
-      });
-
-      autoTable(doc, {
-        startY: 56,
-        head: [['#', 'Nom & Prénom', 'Téléphone', 'École / Provenance', 'Statut', 'Profil']],
-        body: tableRows,
-        theme: 'striped',
-        headStyles: {
-          fillColor: [79, 70, 229],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          fontSize: 8,
-        },
-        bodyStyles: {
-          fontSize: 8,
-          textColor: [30, 41, 59],
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252],
-        },
-        columnStyles: {
-          0: { cellWidth: 10 },
-          1: { cellWidth: 45 },
-          2: { cellWidth: 32 },
-          3: { cellWidth: 45 },
-          4: { cellWidth: 25 },
-          5: { cellWidth: 25 },
-        },
-        didDrawPage: (data) => {
-          const pageCount = (doc as any).internal.getNumberOfPages();
-          doc.setFontSize(8);
-          doc.setTextColor(148, 163, 184);
-          doc.text(
-            `Plateforme Relances WhatsApp - BDE IFRAN | Page ${data.pageNumber} sur ${pageCount}`,
-            14,
-            doc.internal.pageSize.height - 8
-          );
-        }
-      });
-
+      const profileName = activeProfile?.senderName || activeProfile?.name || 'vue_globale';
       const safeProfile = profileName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      doc.save(`Rapport_Prospection_${safeProfile}_${new Date().toISOString().slice(0, 10)}.pdf`);
-      showTemporarySuccess("Le fichier PDF a été téléchargé avec succès !");
+
+      pdf.save(`Rapport_Prospection_${safeProfile}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      showTemporarySuccess("Le rapport PDF au rendu visuel exact a été téléchargé !");
+
+      if (openedTemporarily) {
+        setIsPdfPreviewOpen(false);
+      }
     } catch (e) {
-      console.error("Erreur lors de la génération du PDF:", e);
-      alert("Impossible de générer le fichier PDF.");
+      console.error("Erreur lors de la génération du PDF image:", e);
+      alert("Impossible de générer le fichier PDF. Veuillez réespayer.");
     }
   };
 
