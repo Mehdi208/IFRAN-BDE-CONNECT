@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { dataService } from '../../services/dataService';
 import { ProspectContact, RelancerProfile } from '../../types';
 import { 
@@ -1005,6 +1007,124 @@ const AdminProspects = () => {
     document.body.removeChild(link);
   };
 
+  const handleDownloadPDF = () => {
+    if (filteredProspects.length === 0) {
+      alert("Aucun contact à exporter en PDF pour ce filtre.");
+      return;
+    }
+
+    try {
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const activeProfile = profiles.find(p => p.id === activeProfileId);
+      const profileName = activeProfile?.senderName || activeProfile?.name || 'Vue Globale (Tous)';
+      const baseName = categoryFilter === 'sheets' ? '1er Google Sheet' : categoryFilter === 'descartes' ? 'Lycée International Descartes' : 'Toutes les bases';
+      const currentDateStr = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+      // Header
+      doc.setFontSize(15);
+      doc.setTextColor(30, 27, 75);
+      doc.setFont('helvetica', 'bold');
+      doc.text("BDE IFRAN - Prospection & Relances WhatsApp", 14, 18);
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text("Rapport d'avancement du travail et statut des prospects", 14, 24);
+
+      // Meta info right aligned
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Profil : ${profileName}`, 125, 18);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Date : ${currentDateStr}`, 125, 23);
+      doc.text(`Base : ${baseName}`, 125, 28);
+
+      // Line separator
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(14, 32, 196, 32);
+
+      // Stats Summary Box
+      doc.setFillColor(248, 250, 252);
+      doc.rect(14, 36, 182, 14, 'F');
+      doc.setDrawColor(203, 213, 225);
+      doc.rect(14, 36, 182, 14, 'S');
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(51, 65, 85);
+      doc.text(`TOTAL : ${activeStats.total}`, 18, 45);
+      doc.text(`À FAIRE : ${activeStats.toDo}`, 62, 45);
+      doc.text(`RELANCÉS : ${activeStats.sent}`, 108, 45);
+      doc.text(`AVANCEMENT : ${activeStats.progressPercent}%`, 152, 45);
+
+      // Table Rows
+      const tableRows = filteredProspects.map((p, idx) => {
+        const prof = profiles.find(pr => pr.id === (p.profileId || 'mehdi'));
+        const provenance = p.customFields?.['École de provenance'] || (isDescartesProspect(p) ? 'Lycée Descartes' : 'Non précisée');
+        const statusLabel = 
+          p.status === 'sent' ? 'Relancé' :
+          p.status === 'in_progress' ? 'En cours' :
+          p.status === 'ignored' ? 'Ignoré' : 'À faire';
+
+        return [
+          (idx + 1).toString(),
+          `${p.firstName} ${p.lastName}`.trim(),
+          p.phone || '-',
+          provenance,
+          statusLabel,
+          prof?.name || 'Mehdi'
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 56,
+        head: [['#', 'Nom & Prénom', 'Téléphone', 'École / Provenance', 'Statut', 'Profil']],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [79, 70, 229],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8,
+        },
+        bodyStyles: {
+          fontSize: 8,
+          textColor: [30, 41, 59],
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252],
+        },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 45 },
+          2: { cellWidth: 32 },
+          3: { cellWidth: 45 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 25 },
+        },
+        didDrawPage: (data) => {
+          const pageCount = (doc as any).internal.getNumberOfPages();
+          doc.setFontSize(8);
+          doc.setTextColor(148, 163, 184);
+          doc.text(
+            `Plateforme Relances WhatsApp - BDE IFRAN | Page ${data.pageNumber} sur ${pageCount}`,
+            14,
+            doc.internal.pageSize.height - 8
+          );
+        }
+      });
+
+      const safeProfile = profileName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      doc.save(`Rapport_Prospection_${safeProfile}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      showTemporarySuccess("Le fichier PDF a été téléchargé avec succès !");
+    } catch (e) {
+      console.error("Erreur lors de la génération du PDF:", e);
+      alert("Impossible de générer le fichier PDF.");
+    }
+  };
+
   // Filter prospects belonging to active profile
   const profileProspects = useMemo(() => {
     if (activeProfileId === 'all') return prospects;
@@ -1137,11 +1257,21 @@ const AdminProspects = () => {
             </button>
 
             <button
+              onClick={handleDownloadPDF}
+              className="px-3.5 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-sm font-bold flex items-center gap-2 border border-indigo-200 shadow-sm transition-all hover:scale-[1.01]"
+              title="Télécharger directement le rapport au format PDF"
+            >
+              <FileDown size={16} className="text-indigo-600" />
+              Télécharger en PDF
+            </button>
+
+            <button
               onClick={() => setIsPdfPreviewOpen(true)}
               className="px-3.5 py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-xl text-sm font-bold flex items-center gap-2 border border-gray-300 shadow-sm transition-colors"
+              title="Aperçu du travail à l'écran"
             >
-              <Printer size={16} className="text-indigo-600" />
-              Exporter PDF (Aperçu du travail)
+              <FileText size={16} className="text-gray-600" />
+              Aperçu du travail
             </button>
 
             <button
@@ -1545,15 +1675,18 @@ const AdminProspects = () => {
               <div className="mt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                 <button
                   onClick={() => {
+                    const descParent = "Bonjour M./Mme {nom},\n\nJ'espère que vous allez bien. Je suis {expediteur}, de l'Institut Français du Numérique (IFRAN Abidjan).\n\nSuite aux carrefours d'orientation au Lycée International Descartes 🎓 concernant l'avenir académique de votre enfant {prenom}, je me permets de revenir vers vous.\n\nL'IFRAN propose des cursus d'excellence dans le numérique très prisés par les familles du réseau AEFE :\n\n🏅 Double Diplomation Française & Ivoirienne avec L'École Multimédia de Paris\n🧠 Parcours Ingénieur IA & Data en partenariat avec Aivancity Paris-Cachan (2 ans à Abidjan, 3 ans en France)\n💼 Cursus 100% Pratiques (Bachelors en 3 ans : Développement Web, Création & Communication Digitale avec IA intégrée)\n📊 81% d'insertion professionnelle & +50 entreprises partenaires\n\nAvez-vous déjà arrêté votre choix pour l'orientation de {prenom} ? Nous serions ravis de vous transmettre notre documentation complète et d'échanger avec vous. 😊";
+                    const descJeune = "Bonjour {prenom} ! 👋\n\nJ'espère que tu vas bien. Je suis {expediteur}, de l'Institut Français du Numérique (l'IFRAN Abidjan).\n\nEn tant qu'élève au Lycée International Descartes 🎓, tu prépares ton orientation Post-Bac. Nos programmes d'excellence sont spécialement conçus pour le réseau AEFE / Bac Français :\n\n✨ Ce qui rend l'IFRAN unique :\n🎓 Double Diplomation Française & Ivoirienne (en partenariat avec L'École Multimédia de Paris)\n🤖 Diplôme d'Ingénieur IA & Data (2 ans à Abidjan + 3 ans à Aivancity Paris-Cachan)\n💻 Bachelors en 3 ans 100% Pratiques : Développement Web, Création Digitale, Communication Digitale & IA\n🚀 81% de taux d'insertion professionnelle (+120 projets d'entreprises par an)\n\nAs-tu déjà choisi ton université pour l'an prochain, ou souhaites-tu recevoir notre brochure complète et échanger avec nous ? 😊";
+                    
                     if (activeTemplateTab === 'descartes_parent') {
-                      setDescartesParentTemplateBody("Bonjour M./Mme {nom},\n\nJ'espère que vous allez bien. Je suis Méhdi Traoré, de l'Institut Français du Numérique (IFRAN).\n\nSuite aux carrefours d'orientation au Lycée International Descartes 🎓 concernant l'avenir académique de votre enfant {prenom}, je reviens vers vous.\n\nL'IFRAN propose des cursus d'excellence dans le numérique très prisés des élèves du réseau AEFE / Descartes.\n\nAvez-vous déjà arrêté votre choix pour l'orientation de {prenom} ? Nous serions ravis de vous transmettre notre documentation détaillée. 😊");
+                      setDescartesParentTemplateBody(descParent);
                     } else {
-                      setDescartesJeuneTemplateBody("Bonjour {prenom} ! 👋\n\nJ'espère que tu vas bien. Je suis Méhdi Traoré, de l'Institut Français du Numérique (l'IFRAN).\n\nEn tant qu'élève au Lycée International Descartes 🎓, tu prépares ton orientation Post-Bac. Nos Bachelors et formations supérieures (Génie Logiciel, Design, Data & IA) sont particulièrement adaptés au rythme du Bac Français et au réseau AEFE.\n\nAs-tu déjà choisi ton université pour l'an prochain, ou souhaites-tu recevoir notre brochure spéciale Descartes & échanger avec nous ? 😊");
+                      setDescartesJeuneTemplateBody(descJeune);
                       if (activeTemplateTab !== 'descartes_jeune') {
                         setActiveTemplateTab('descartes_jeune');
                       }
                     }
-                    showTemporarySuccess("Modèle spécial Lycée Descartes chargé !");
+                    showTemporarySuccess("Modèle spécial Lycée Descartes mis à jour !");
                   }}
                   className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-xs"
                 >
@@ -2227,11 +2360,11 @@ const AdminProspects = () => {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.print()}
+                  onClick={handleDownloadPDF}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all"
                 >
-                  <Printer size={15} />
-                  Imprimer / Enregistrer en PDF
+                  <FileDown size={15} />
+                  Télécharger en PDF
                 </button>
                 <button
                   onClick={() => setIsPdfPreviewOpen(false)}

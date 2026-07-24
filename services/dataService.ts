@@ -449,60 +449,104 @@ export const dataService = {
   },
 
   // --- PROSPECTS CAMPAIGNS ---
-  fetchProspects: () => getAll<ProspectContact>('prospect_contacts', []),
-  addProspect: async (p: Omit<ProspectContact, 'id'>) => {
-    const userId = auth.currentUser?.uid;
-    const data = sanitizeData(userId ? { ...p, userId } : p);
+  fetchProspects: async (): Promise<ProspectContact[]> => {
+    const localProspects = getFromStorage<ProspectContact[]>('prospect_contacts', []);
     if (db) {
       try {
-        await addDoc(collection(db, 'prospect_contacts'), data);
+        const snapshot = await getDocs(collection(db, 'prospect_contacts'));
+        if (!snapshot.empty) {
+          const firestoreProspects = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ProspectContact));
+          
+          // Sync any local prospects that might not be in Firestore yet
+          const missingInFirestore = localProspects.filter(lp => !firestoreProspects.some(fp => fp.id === lp.id));
+          if (missingInFirestore.length > 0) {
+            for (let i = 0; i < missingInFirestore.length; i += 400) {
+              const uploadBatch = writeBatch(db);
+              const chunk = missingInFirestore.slice(i, i + 400);
+              chunk.forEach(m => {
+                const docRef = doc(db, 'prospect_contacts', m.id);
+                const { id, ...data } = m;
+                uploadBatch.set(docRef, sanitizeData(data), { merge: true });
+              });
+              await uploadBatch.commit();
+            }
+            firestoreProspects.push(...missingInFirestore);
+          }
+          
+          saveToStorage('prospect_contacts', firestoreProspects);
+          return firestoreProspects;
+        } else if (localProspects.length > 0) {
+          // If Firestore is empty but local device has prospects, upload them immediately
+          await dataService.saveProspectsBulk(localProspects);
+          return localProspects;
+        }
+      } catch (error) {
+        console.warn("Firestore fetch error for prospect_contacts:", error);
+      }
+    }
+    return localProspects;
+  },
+  addProspect: async (p: Omit<ProspectContact, 'id'>) => {
+    const userId = auth.currentUser?.uid;
+    const newId = 'local_' + Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5);
+    const data = sanitizeData(userId ? { ...p, userId } : p);
+    
+    const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
+    const newContact = { ...data, id: newId } as ProspectContact;
+    const updated = [...curr, newContact];
+    saveToStorage('prospect_contacts', updated);
+
+    if (db) {
+      try {
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(doc(db, 'prospect_contacts', newId), data, { merge: true });
         return dataService.fetchProspects();
       } catch (e) {
         console.warn("Firestore error adding prospect, falling back to local:", e);
       }
     }
-    const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
-    const updated = [...curr, { ...data, id: 'local_' + Date.now().toString() + '_' + Math.random().toString(36).substr(2, 5) }];
-    saveToStorage('prospect_contacts', updated);
     return updated;
   },
   updateProspect: async (p: ProspectContact) => {
     const userId = auth.currentUser?.uid;
     const { id, ...data } = sanitizeData(userId ? { ...p, userId } : p);
-    if (db && !id.startsWith('local_')) {
-      try {
-        await updateDoc(doc(db, 'prospect_contacts', id), data);
-        return dataService.fetchProspects();
-      } catch (e) {
-        console.warn("Firestore error updating prospect, falling back to local:", e);
-      }
-    }
+    
+    // Immediately sync local storage
     const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
     const updated = curr.map(x => x.id === id ? { ...data, id } : x);
     saveToStorage('prospect_contacts', updated);
+
+    if (db) {
+      try {
+        const { setDoc } = await import('firebase/firestore');
+        await setDoc(doc(db, 'prospect_contacts', id), data, { merge: true });
+        return dataService.fetchProspects();
+      } catch (e) {
+        console.warn("Firestore error updating prospect:", e);
+      }
+    }
     return updated;
   },
   deleteProspect: async (id: string) => {
-    if (db && !id.startsWith('local_')) {
+    const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
+    const updated = curr.filter(x => x.id !== id);
+    saveToStorage('prospect_contacts', updated);
+
+    if (db) {
       try {
         await deleteDoc(doc(db, 'prospect_contacts', id));
         return dataService.fetchProspects();
       } catch (e) {
-        console.warn("Firestore error deleting prospect, falling back to local:", e);
+        console.warn("Firestore error deleting prospect:", e);
       }
     }
-    const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
-    const updated = curr.filter(x => x.id !== id);
-    saveToStorage('prospect_contacts', updated);
     return updated;
   },
   deleteAllProspects: async () => {
-    const userId = auth.currentUser?.uid;
     saveToStorage('prospect_contacts', []);
     if (db) {
       try {
-        const q = userId ? query(collection(db, 'prospect_contacts'), where('userId', '==', userId)) : query(collection(db, 'prospect_contacts'));
-        const snapshot = await getDocs(q);
+        const snapshot = await getDocs(collection(db, 'prospect_contacts'));
         const docsToDelete = snapshot.docs;
         for (let i = 0; i < docsToDelete.length; i += 400) {
           const deleteBatch = writeBatch(db);
@@ -517,7 +561,6 @@ export const dataService = {
     return [];
   },
   deleteProspectsByProfile: async (profileId: string) => {
-    const userId = auth.currentUser?.uid;
     const curr = getFromStorage<ProspectContact[]>('prospect_contacts', []);
     const updated = curr.filter(x => (x.profileId || 'mehdi') !== profileId);
     saveToStorage('prospect_contacts', updated);
@@ -541,16 +584,15 @@ export const dataService = {
   },
   saveProspectsBulk: async (contacts: ProspectContact[]) => {
     const userId = auth.currentUser?.uid;
-    // Always sync with localStorage immediately so state is never lost
+    // Always sync with localStorage immediately
     saveToStorage('prospect_contacts', contacts);
 
     if (db) {
       try {
-        const q = userId ? query(collection(db, 'prospect_contacts'), where('userId', '==', userId)) : query(collection(db, 'prospect_contacts'));
-        const snapshot = await getDocs(q);
+        const snapshot = await getDocs(collection(db, 'prospect_contacts'));
         const docsToDelete = snapshot.docs;
 
-        // Delete in safe chunks <= 400 (Firestore limit is 500)
+        // Delete existing docs in safe chunks
         for (let i = 0; i < docsToDelete.length; i += 400) {
           const deleteBatch = writeBatch(db);
           const chunk = docsToDelete.slice(i, i + 400);
@@ -558,12 +600,12 @@ export const dataService = {
           await deleteBatch.commit();
         }
 
-        // Insert in safe chunks <= 400
+        // Insert contacts with doc ID matching contact ID
         for (let i = 0; i < contacts.length; i += 400) {
           const addBatch = writeBatch(db);
           const chunk = contacts.slice(i, i + 400);
           chunk.forEach(c => {
-            const docRef = doc(collection(db, 'prospect_contacts'));
+            const docRef = doc(db, 'prospect_contacts', c.id);
             const { id, ...data } = c;
             addBatch.set(docRef, sanitizeData(userId ? { ...data, userId } : data));
           });
@@ -594,9 +636,9 @@ export const dataService = {
     } else if (templateId === 'relance_parent') {
       defaultTemplate = "Bonjour M./Mme {nom},\n\nJe reviens vers vous suite à notre précédent échange concernant l'orientation de {prenom}. Avez-vous pu en discuter ? N'hésitez pas si vous avez des questions sur l'IFRAN !";
     } else if (templateId === 'descartes_jeune') {
-      defaultTemplate = "Bonjour {prenom} ! 👋\n\nJ'espère que tu vas bien. Je suis Méhdi Traoré, de l'Institut Français du Numérique (l'IFRAN).\n\nEn tant qu'élève au Lycée International Descartes 🎓, tu prépares ton orientation Post-Bac. Nos Bachelors et formations supérieures (Génie Logiciel, Design, Data & IA) sont particulièrement adaptés au rythme du Bac Français et au réseau AEFE.\n\nAs-tu déjà choisi ton université pour l'an prochain, ou souhaites-tu recevoir notre brochure spéciale Descartes & échanger avec nous ? 😊";
+      defaultTemplate = "Bonjour {prenom} ! 👋\n\nJ'espère que tu vas bien. Je suis {expediteur}, de l'Institut Français du Numérique (l'IFRAN Abidjan).\n\nEn tant qu'élève au Lycée International Descartes 🎓, tu prépares ton orientation Post-Bac. Nos programmes d'excellence sont spécialement conçus pour le réseau AEFE / Bac Français :\n\n✨ Ce qui rend l'IFRAN unique :\n🎓 Double Diplomation Française & Ivoirienne (en partenariat avec L'École Multimédia de Paris)\n🤖 Diplôme d'Ingénieur IA & Data (2 ans à Abidjan + 3 ans à Aivancity Paris-Cachan)\n💻 Bachelors en 3 ans 100% Pratiques : Développement Web, Création Digitale, Communication Digitale & IA\n🚀 81% de taux d'insertion professionnelle (+120 projets d'entreprises par an)\n\nAs-tu déjà choisi ton université pour l'an prochain, ou souhaites-tu recevoir notre brochure complète et échanger avec nous ? 😊";
     } else if (templateId === 'descartes_parent') {
-      defaultTemplate = "Bonjour M./Mme {nom},\n\nJ'espère que vous allez bien. Je suis Méhdi Traoré, de l'Institut Français du Numérique (IFRAN).\n\nSuite aux carrefours d'orientation au Lycée International Descartes 🎓 concernant l'avenir académique de votre enfant {prenom}, je reviens vers vous.\n\nL'IFRAN propose des cursus d'excellence dans le numérique très prisés des élèves du réseau AEFE / Descartes.\n\nAvez-vous déjà arrêté votre choix pour l'orientation de {prenom} ? Nous serions ravis de vous transmettre notre documentation détaillée. 😊";
+      defaultTemplate = "Bonjour M./Mme {nom},\n\nJ'espère que vous allez bien. Je suis {expediteur}, de l'Institut Français du Numérique (IFRAN Abidjan).\n\nSuite aux carrefours d'orientation au Lycée International Descartes 🎓 concernant l'avenir académique de votre enfant {prenom}, je me permets de revenir vers vous.\n\nL'IFRAN propose des cursus d'excellence dans le numérique très prisés par les familles du réseau AEFE :\n\n🏅 Double Diplomation Française & Ivoirienne avec L'École Multimédia de Paris\n🧠 Parcours Ingénieur IA & Data en partenariat avec Aivancity Paris-Cachan (2 ans à Abidjan, 3 ans en France)\n💼 Cursus 100% Pratiques (Bachelors en 3 ans : Développement Web, Création & Communication Digitale avec IA intégrée)\n📊 81% d'insertion professionnelle & +50 entreprises partenaires\n\nAvez-vous déjà arrêté votre choix pour l'orientation de {prenom} ? Nous serions ravis de vous transmettre notre documentation complète et d'échanger avec vous. 😊";
     } else {
       defaultTemplate = "Bonjour {prenom},\n\nj’espère que vous allez bien. Je suis Méhdi Traoré, de l’Institut Français du Numérique (l’IFRAN). Nous avons eu vos coordonnées lors d'un salon d’orientation / journée carrière. Je reviens vers vous pour savoir si vous avez déjà une université, ou si vous envisagez de venir dans notre école...😊";
     }
