@@ -1707,31 +1707,16 @@ const AdminProspects = () => {
                 </button>
               </div>
 
-              {categoryFilter === 'descartes' && (
-                <button
-                  onClick={() => {
-                    setImportMode('descartes_pdf');
-                    setIsPasteOpen(true);
-                  }}
-                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
-                >
-                  <Clipboard size={14} />
-                  Importer PDF Descartes
-                </button>
-              )}
-
-              {categoryFilter === 'sheets' && (
-                <button
-                  onClick={() => {
-                    setImportMode('standard');
-                    setIsPasteOpen(true);
-                  }}
-                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
-                >
-                  <Clipboard size={14} />
-                  Importer 1er Google Sheet
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setPasteTargetCategory(categoryFilter === 'descartes' ? 'descartes' : 'sheets');
+                  setIsPasteOpen(true);
+                }}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+              >
+                <Clipboard size={14} />
+                Coller Excel / Google Sheet
+              </button>
             </div>
 
             {/* Campaign Control Toolbar & Contacts Table */}
