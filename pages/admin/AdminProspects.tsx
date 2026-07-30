@@ -88,7 +88,7 @@ const AdminProspects = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<'sheets' | 'descartes' | 'all'>('sheets');
+  const [categoryFilter, setCategoryFilter] = useState<'sheets' | 'descartes' | 'all'>('all');
   const [templateBody, setTemplateBody] = useState('');
   const [parentTemplateBody, setParentTemplateBody] = useState('');
   const [relanceJeuneTemplateBody, setRelanceJeuneTemplateBody] = useState('');
@@ -153,6 +153,24 @@ const AdminProspects = () => {
 
   useEffect(() => {
     loadData();
+
+    // Subscribe to live Firestore updates across all devices
+    const unsubProspects = dataService.subscribeToProspects((newProspects) => {
+      if (newProspects && newProspects.length > 0) {
+        setProspects(newProspects);
+      }
+    });
+
+    const unsubProfiles = dataService.subscribeToProfiles((newProfiles) => {
+      if (newProfiles && newProfiles.length > 0) {
+        setProfiles(newProfiles);
+      }
+    });
+
+    return () => {
+      unsubProspects();
+      unsubProfiles();
+    };
   }, []);
 
   const loadData = async () => {
@@ -1189,17 +1207,30 @@ const AdminProspects = () => {
     }
   };
 
+  // Helper to match prospect profile ID flexibly
+  const matchesProfileId = (prospectProfileId: string | undefined, targetId: string): boolean => {
+    if (targetId === 'all') return true;
+    const pId = (prospectProfileId || 'mehdi').toLowerCase().trim();
+    const tId = targetId.toLowerCase().trim();
+    if (pId === tId) return true;
+    // Handle variations for Emmanuel / Emmanuelle
+    if ((tId.includes('emmanuel') || tId.includes('emmanuelle')) && (pId.includes('emmanuel') || pId.includes('emmanuelle'))) {
+      return true;
+    }
+    return false;
+  };
+
   // Filter prospects belonging to active profile
   const profileProspects = useMemo(() => {
     if (activeProfileId === 'all') return prospects;
-    return prospects.filter(p => (p.profileId || 'mehdi') === activeProfileId);
+    return prospects.filter(p => matchesProfileId(p.profileId, activeProfileId));
   }, [prospects, activeProfileId]);
 
   // Counts per profile for tab badges
   const profileCounts = useMemo(() => {
     const map: Record<string, number> = { all: prospects.length };
     profiles.forEach(pr => {
-      map[pr.id] = prospects.filter(p => (p.profileId || 'mehdi') === pr.id).length;
+      map[pr.id] = prospects.filter(p => matchesProfileId(p.profileId, pr.id)).length;
     });
     return map;
   }, [prospects, profiles]);
@@ -2273,12 +2304,32 @@ const AdminProspects = () => {
                     
                     {filteredProspects.length === 0 && (
                       <tr>
-                        <td colSpan={isSelectionMode ? 6 : 5} className="p-12 text-center text-gray-400 text-sm">
-                          <AlertCircle className="mx-auto mb-2 text-gray-300" size={32} />
-                          <p className="font-semibold text-gray-600">Aucun contact trouvé</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            Commencez par importer des contacts ou coller des cellules Excel.
-                          </p>
+                        <td colSpan={10} className="p-10 text-center text-gray-400 text-sm">
+                          <AlertCircle className="mx-auto mb-2 text-amber-500 animate-bounce" size={32} />
+                          <p className="font-bold text-gray-800 text-sm">Aucun contact dans la vue filtrée</p>
+                          {prospects.length > 0 ? (
+                            <div className="mt-2 space-y-3 max-w-md mx-auto bg-amber-50/80 p-4 rounded-xl border border-amber-200">
+                              <p className="text-xs text-amber-900">
+                                ⚡ Vos données existent bien ! Il y a <strong className="text-amber-950 font-bold">{prospects.length} contact(s) au total</strong> enregistrés dans le Cloud, mais le profil ou filtre actif actuellement les masque.
+                              </p>
+                              <button
+                                onClick={() => {
+                                  setActiveProfileId('all');
+                                  setCategoryFilter('all');
+                                  setStatusFilter('all');
+                                  setSearchTerm('');
+                                }}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold inline-flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                              >
+                                <Building2 size={14} />
+                                Afficher la Vue Globale (Tous les contacts)
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-400 mt-1">
+                              Aucune donnée trouvée. Cliquez sur "Synchroniser Cloud" ou importez des contacts.
+                            </p>
+                          )}
                         </td>
                       </tr>
                     )}

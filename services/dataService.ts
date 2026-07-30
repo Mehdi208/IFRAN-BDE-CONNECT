@@ -1,13 +1,15 @@
 
 import { db, auth } from '../firebaseConfig';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, writeBatch, getDoc } from 'firebase/firestore';
-import { Club, Atelier, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord, Product, FoodOrder, GalleryItem, AssinieRegistration, NazaRegistration, ProspectContact, CampaignTemplate } from '../types';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, writeBatch, getDoc, onSnapshot } from 'firebase/firestore';
+import { Club, Atelier, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord, Product, FoodOrder, GalleryItem, AssinieRegistration, NazaRegistration, ProspectContact, CampaignTemplate, RelancerProfile } from '../types';
 
 export const CINEMA_CLUB_ID = 'atelier-cinema-default';
 
 const sanitizeData = (data: any): any => {
-  if (data === null || typeof data !== 'object') return data;
-  if (Array.isArray(data)) return data.map(sanitizeData);
+  if (data === null || data === undefined) return null;
+  if (typeof data !== 'object') return data;
+  if (data instanceof Date) return data.toISOString();
+  if (Array.isArray(data)) return data.map(sanitizeData).filter(item => item !== undefined);
   const clean: any = {};
   Object.keys(data).forEach(key => {
     if (data[key] !== undefined) {
@@ -449,6 +451,21 @@ export const dataService = {
   },
 
   // --- PROSPECT PROFILES ---
+  subscribeToProfiles: (callback: (profiles: RelancerProfile[]) => void) => {
+    if (!db) return () => {};
+    try {
+      return onSnapshot(collection(db, 'prospect_profiles'), (snapshot) => {
+        if (!snapshot.empty) {
+          const firestoreProfiles: RelancerProfile[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as RelancerProfile));
+          callback(firestoreProfiles);
+        }
+      }, (err) => console.warn("Profiles subscription error:", err));
+    } catch (e) {
+      console.warn("Could not subscribe to profiles:", e);
+      return () => {};
+    }
+  },
+
   fetchProfiles: async (): Promise<RelancerProfile[]> => {
     const DEFAULT_PROFILES: RelancerProfile[] = [
       { id: 'mehdi', name: 'Mehdi', senderName: 'Méhdi Traoré', role: 'Responsable', color: 'indigo', avatarEmoji: '👤' },
@@ -541,6 +558,22 @@ export const dataService = {
   },
 
   // --- PROSPECTS CAMPAIGNS ---
+  subscribeToProspects: (callback: (prospects: ProspectContact[]) => void) => {
+    if (!db) return () => {};
+    try {
+      return onSnapshot(collection(db, 'prospect_contacts'), (snapshot) => {
+        const firestoreProspects: ProspectContact[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ProspectContact));
+        if (firestoreProspects.length > 0) {
+          saveToStorage('prospect_contacts', firestoreProspects);
+          callback(firestoreProspects);
+        }
+      }, (err) => console.warn("Prospects subscription error:", err));
+    } catch (e) {
+      console.warn("Could not subscribe to prospects:", e);
+      return () => {};
+    }
+  },
+
   fetchProspects: async (): Promise<ProspectContact[]> => {
     const localProspects = getFromStorage<ProspectContact[]>('prospect_contacts', []);
     if (db) {
@@ -552,10 +585,10 @@ export const dataService = {
 
         const contactsMap = new Map<string, ProspectContact>();
 
-        // Load Firestore docs
+        // Load Firestore docs into map
         firestoreProspects.forEach(fp => contactsMap.set(fp.id, fp));
 
-        // Intelligently merge local prospects
+        // Bi-directionally merge local prospects
         let hasNewLocalToUpload = false;
         const localToUpload: ProspectContact[] = [];
 
@@ -569,15 +602,20 @@ export const dataService = {
             let merged = { ...existingInFirestore };
             let needsUpdate = false;
 
-            if (lp.status !== 'to_do' && existingInFirestore.status === 'to_do') {
+            if (lp.status !== existingInFirestore.status && lp.status) {
               merged.status = lp.status;
-              if (lp.lastRelanceDate) merged.lastRelanceDate = lp.lastRelanceDate;
-              if (lp.notes) merged.notes = lp.notes;
-              if (lp.profileId) merged.profileId = lp.profileId;
               needsUpdate = true;
-            } else if (lp.lastRelanceDate && !existingInFirestore.lastRelanceDate) {
+            }
+            if (lp.profileId && lp.profileId !== existingInFirestore.profileId) {
+              merged.profileId = lp.profileId;
+              needsUpdate = true;
+            }
+            if (lp.notes && lp.notes !== existingInFirestore.notes) {
+              merged.notes = lp.notes;
+              needsUpdate = true;
+            }
+            if (lp.lastRelanceDate && lp.lastRelanceDate !== existingInFirestore.lastRelanceDate) {
               merged.lastRelanceDate = lp.lastRelanceDate;
-              if (lp.notes) merged.notes = lp.notes;
               needsUpdate = true;
             }
 
