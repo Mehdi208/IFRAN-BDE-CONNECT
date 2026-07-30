@@ -149,12 +149,17 @@ const AdminProspects = () => {
     }
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
     try {
+      const profs = await dataService.fetchProfiles();
+      setProfiles(profs);
+
       const p = await dataService.fetchProspects();
       setProspects(p);
       if (p.length > 0) {
@@ -177,6 +182,22 @@ const AdminProspects = () => {
       console.error("Error loading prospects data:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const profs = await dataService.fetchProfiles();
+      setProfiles(profs);
+      const p = await dataService.fetchProspects();
+      setProspects(p);
+      showTemporarySuccess("⚡ Synchronisation Cloud réussie ! Profils et prospects mis à jour.");
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la synchronisation cloud.");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -226,7 +247,7 @@ const AdminProspects = () => {
     return msg;
   };
 
-  const handleAddProfile = (e: React.FormEvent) => {
+  const handleAddProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProfileName.trim()) return;
     const id = newProfileName.toLowerCase().trim().replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString().slice(-4);
@@ -238,13 +259,13 @@ const AdminProspects = () => {
       avatarEmoji: newProfileEmoji || '👤',
       color: 'indigo'
     };
-    const updated = [...profiles, newProf];
+    const updated = await dataService.saveProfile(newProf);
     setProfiles(updated);
     setActiveProfileId(id);
     setNewProfileName('');
     setNewProfileSender('');
     setIsAddProfileModalOpen(false);
-    showTemporarySuccess(`Profil "${newProf.name}" créé avec succès !`);
+    showTemporarySuccess(`Profil "${newProf.name}" créé avec succès et synchronisé sur le cloud !`);
   };
 
   const handleSaveTemplate = async () => {
@@ -1288,6 +1309,16 @@ const AdminProspects = () => {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 rounded-xl text-sm font-bold flex items-center gap-2 border border-emerald-600 shadow-sm transition-all hover:scale-[1.01]"
+              title="Synchroniser immédiatement vos profils et prospects avec le cloud"
+            >
+              <RefreshCw size={16} className={isSyncing ? "animate-spin" : ""} />
+              {isSyncing ? "Synchronisation..." : "Synchroniser Cloud"}
+            </button>
+
             <button
               onClick={() => {
                 setPasteTargetCategory(categoryFilter === 'descartes' ? 'descartes' : 'sheets');

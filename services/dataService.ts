@@ -448,38 +448,164 @@ export const dataService = {
     return dataService.fetchNazaRegistrations();
   },
 
+  // --- PROSPECT PROFILES ---
+  fetchProfiles: async (): Promise<RelancerProfile[]> => {
+    const DEFAULT_PROFILES: RelancerProfile[] = [
+      { id: 'mehdi', name: 'Mehdi', senderName: 'Méhdi Traoré', role: 'Responsable', color: 'indigo', avatarEmoji: '👤' },
+      { id: 'emmanuelle', name: 'Emmanuelle', senderName: 'Emmanuelle', role: 'Relanceur', color: 'rose', avatarEmoji: '🌸' },
+      { id: 'nour', name: 'Nour', senderName: 'Nour', role: 'Relanceur', color: 'amber', avatarEmoji: '⚡' },
+      { id: 'joshua', name: 'Joshua', senderName: 'Joshua', role: 'Relanceur', color: 'emerald', avatarEmoji: '🚀' },
+      { id: 'othniel', name: 'Othniel', senderName: 'Othniel', role: 'Relanceur', color: 'purple', avatarEmoji: '🌟' },
+    ];
+    
+    const localProfiles = getFromStorage<RelancerProfile[]>('whatsapp_relancer_profiles', DEFAULT_PROFILES);
+
+    if (db) {
+      try {
+        const snapshot = await getDocs(collection(db, 'prospect_profiles'));
+        let firestoreProfiles: RelancerProfile[] = [];
+        if (!snapshot.empty) {
+          firestoreProfiles = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as RelancerProfile));
+        }
+
+        const profilesMap = new Map<string, RelancerProfile>();
+        DEFAULT_PROFILES.forEach(p => profilesMap.set(p.id, p));
+        firestoreProfiles.forEach(p => profilesMap.set(p.id, p));
+        localProfiles.forEach(p => profilesMap.set(p.id, p));
+
+        const mergedProfiles = Array.from(profilesMap.values());
+
+        const missingInFirestore = mergedProfiles.filter(p => !firestoreProfiles.some(fp => fp.id === p.id));
+        if (missingInFirestore.length > 0) {
+          for (let i = 0; i < missingInFirestore.length; i += 400) {
+            const batch = writeBatch(db);
+            const chunk = missingInFirestore.slice(i, i + 400);
+            chunk.forEach(p => {
+              const docRef = doc(db, 'prospect_profiles', p.id);
+              const { id, ...data } = p;
+              batch.set(docRef, sanitizeData(data), { merge: true });
+            });
+            await batch.commit();
+          }
+        }
+
+        saveToStorage('whatsapp_relancer_profiles', mergedProfiles);
+        return mergedProfiles;
+      } catch (e) {
+        console.warn("Firestore error fetching prospect_profiles:", e);
+      }
+    }
+    return localProfiles;
+  },
+
+  saveProfile: async (profile: RelancerProfile) => {
+    const localProfiles = getFromStorage<RelancerProfile[]>('whatsapp_relancer_profiles', []);
+    const existingIdx = localProfiles.findIndex(p => p.id === profile.id);
+    let updated: RelancerProfile[];
+    if (existingIdx >= 0) {
+      updated = [...localProfiles];
+      updated[existingIdx] = profile;
+    } else {
+      updated = [...localProfiles, profile];
+    }
+    saveToStorage('whatsapp_relancer_profiles', updated);
+
+    if (db) {
+      try {
+        const { setDoc } = await import('firebase/firestore');
+        const { id, ...data } = profile;
+        await setDoc(doc(db, 'prospect_profiles', id), sanitizeData(data), { merge: true });
+      } catch (e) {
+        console.warn("Error saving profile to Firestore:", e);
+      }
+    }
+    return dataService.fetchProfiles();
+  },
+
+  saveProfilesBulk: async (profiles: RelancerProfile[]) => {
+    saveToStorage('whatsapp_relancer_profiles', profiles);
+    if (db) {
+      try {
+        const batch = writeBatch(db);
+        profiles.forEach(p => {
+          const docRef = doc(db, 'prospect_profiles', p.id);
+          const { id, ...data } = p;
+          batch.set(docRef, sanitizeData(data), { merge: true });
+        });
+        await batch.commit();
+      } catch (e) {
+        console.warn("Error bulk saving profiles to Firestore:", e);
+      }
+    }
+    return profiles;
+  },
+
   // --- PROSPECTS CAMPAIGNS ---
   fetchProspects: async (): Promise<ProspectContact[]> => {
     const localProspects = getFromStorage<ProspectContact[]>('prospect_contacts', []);
     if (db) {
       try {
         const snapshot = await getDocs(collection(db, 'prospect_contacts'));
-        if (!snapshot.empty) {
-          const firestoreProspects = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ProspectContact));
-          
-          // Sync any local prospects that might not be in Firestore yet
-          const missingInFirestore = localProspects.filter(lp => !firestoreProspects.some(fp => fp.id === lp.id));
-          if (missingInFirestore.length > 0) {
-            for (let i = 0; i < missingInFirestore.length; i += 400) {
-              const uploadBatch = writeBatch(db);
-              const chunk = missingInFirestore.slice(i, i + 400);
-              chunk.forEach(m => {
-                const docRef = doc(db, 'prospect_contacts', m.id);
-                const { id, ...data } = m;
-                uploadBatch.set(docRef, sanitizeData(data), { merge: true });
-              });
-              await uploadBatch.commit();
+        const firestoreProspects: ProspectContact[] = snapshot.empty 
+          ? [] 
+          : snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ProspectContact));
+
+        const contactsMap = new Map<string, ProspectContact>();
+
+        // Load Firestore docs
+        firestoreProspects.forEach(fp => contactsMap.set(fp.id, fp));
+
+        // Intelligently merge local prospects
+        let hasNewLocalToUpload = false;
+        const localToUpload: ProspectContact[] = [];
+
+        localProspects.forEach(lp => {
+          const existingInFirestore = contactsMap.get(lp.id);
+          if (!existingInFirestore) {
+            contactsMap.set(lp.id, lp);
+            localToUpload.push(lp);
+            hasNewLocalToUpload = true;
+          } else {
+            let merged = { ...existingInFirestore };
+            let needsUpdate = false;
+
+            if (lp.status !== 'to_do' && existingInFirestore.status === 'to_do') {
+              merged.status = lp.status;
+              if (lp.lastRelanceDate) merged.lastRelanceDate = lp.lastRelanceDate;
+              if (lp.notes) merged.notes = lp.notes;
+              if (lp.profileId) merged.profileId = lp.profileId;
+              needsUpdate = true;
+            } else if (lp.lastRelanceDate && !existingInFirestore.lastRelanceDate) {
+              merged.lastRelanceDate = lp.lastRelanceDate;
+              if (lp.notes) merged.notes = lp.notes;
+              needsUpdate = true;
             }
-            firestoreProspects.push(...missingInFirestore);
+
+            contactsMap.set(lp.id, merged);
+
+            if (needsUpdate) {
+              localToUpload.push(merged);
+              hasNewLocalToUpload = true;
+            }
           }
-          
-          saveToStorage('prospect_contacts', firestoreProspects);
-          return firestoreProspects;
-        } else if (localProspects.length > 0) {
-          // If Firestore is empty but local device has prospects, upload them immediately
-          await dataService.saveProspectsBulk(localProspects);
-          return localProspects;
+        });
+
+        if (hasNewLocalToUpload && localToUpload.length > 0) {
+          for (let i = 0; i < localToUpload.length; i += 400) {
+            const uploadBatch = writeBatch(db);
+            const chunk = localToUpload.slice(i, i + 400);
+            chunk.forEach(m => {
+              const docRef = doc(db, 'prospect_contacts', m.id);
+              const { id, ...data } = m;
+              uploadBatch.set(docRef, sanitizeData(data), { merge: true });
+            });
+            await uploadBatch.commit();
+          }
         }
+
+        const mergedList = Array.from(contactsMap.values());
+        saveToStorage('prospect_contacts', mergedList);
+        return mergedList;
       } catch (error) {
         console.warn("Firestore fetch error for prospect_contacts:", error);
       }
@@ -584,30 +710,18 @@ export const dataService = {
   },
   saveProspectsBulk: async (contacts: ProspectContact[]) => {
     const userId = auth.currentUser?.uid;
-    // Always sync with localStorage immediately
     saveToStorage('prospect_contacts', contacts);
 
     if (db) {
       try {
-        const snapshot = await getDocs(collection(db, 'prospect_contacts'));
-        const docsToDelete = snapshot.docs;
-
-        // Delete existing docs in safe chunks
-        for (let i = 0; i < docsToDelete.length; i += 400) {
-          const deleteBatch = writeBatch(db);
-          const chunk = docsToDelete.slice(i, i + 400);
-          chunk.forEach(d => deleteBatch.delete(d.ref));
-          await deleteBatch.commit();
-        }
-
-        // Insert contacts with doc ID matching contact ID
+        // Upsert without deleting other existing contacts in Firestore!
         for (let i = 0; i < contacts.length; i += 400) {
           const addBatch = writeBatch(db);
           const chunk = contacts.slice(i, i + 400);
           chunk.forEach(c => {
             const docRef = doc(db, 'prospect_contacts', c.id);
             const { id, ...data } = c;
-            addBatch.set(docRef, sanitizeData(userId ? { ...data, userId } : data));
+            addBatch.set(docRef, sanitizeData(userId ? { ...data, userId } : data), { merge: true });
           });
           await addBatch.commit();
         }
