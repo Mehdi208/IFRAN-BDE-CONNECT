@@ -220,8 +220,8 @@ export interface MandateReportData {
   prospectsCount: number;
   sentProspectsCount: number;
   canteenOrdersCount: number;
-  challengesFaced: string;
-  recommendations: string;
-  conclusion: string;
+  challengesFaced?: string;
+  recommendations?: string;
+  conclusion?: string;
 }
 

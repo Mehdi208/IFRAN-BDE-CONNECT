@@ -90,8 +90,8 @@ const AdminMandateReport: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [saveSuccessNotification, setSaveSuccessNotification] = useState(false);
 
-  // Active view tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'finances' | 'clubs' | 'digital' | 'recommendations'>('overview');
+  // Active view tab (Recommendations tab removed as explicitly requested)
+  const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'finances' | 'clubs' | 'digital'>('overview');
 
   // Filter for events
   const [eventFilter, setEventFilter] = useState<'all' | 'past' | 'upcoming'>('all');
@@ -111,17 +111,6 @@ const AdminMandateReport: React.FC = () => {
     "À l'heure de dresser le bilan de ce mandat à la présidence du Bureau des Étudiants de l'IFRAN, c'est avec un profond sentiment d'honneur, de fierté et de devoir accompli que nous soumettons ce rapport officiel à l'Administration. Dès notre prise de fonction, notre vision s'est articulée autour de trois axes cardinaux : fédérer l'ensemble des promotions autour d'une vie de campus vibrante, valoriser les compétences de nos étudiants par des ateliers pratiques de haut niveau, et instaurer une gestion administrative et financière rigoureuse, transparente et pérenne.\n\n" +
     "Pratiquement chaque initiative promise a été traduite en action concrète et intégrée directement au sein de notre écosystème numérique BDE. De la mise en place d'ateliers réguliers à la dynamisation des clubs permanents, en passant par nos grands rassemblements festifs et culturels (Sorties, Projections Cinéma, Soirées), ainsi que la digitalisation de nos services étudiants (gestion de la cantine et relances personnalisées), notre équipe s'est investie sans compter au service de l'excellence de l'IFRAN.";
 
-  const defaultChallenges = 
-    "1. Calendrier académique serré et conciliation des projets associatifs avec les exigences des cours et partiels.\n" +
-    "2. Mobilisation hétérogène des cotisations au début de l'année, nécessitant un travail de sensibilisation accru.\n" +
-    "3. Logistique des grands événements et contraintes d'espaces dédiés pour certaines activités hebdomadaires des clubs.";
-
-  const defaultRecommendations = 
-    "1. Institutionnaliser et sanctuariser un créneau hebdomadaire fixe dans l'emploi du temps pour les Ateliers Afternoon et réunions de clubs.\n" +
-    "2. Maintenir et pérenniser la plateforme numérique du BDE (BDE Connect) pour la transmission fluide de la base de données et des outils à la future équipe.\n" +
-    "3. Intégrer la cotisation BDE dès les formalités d'inscription administrative à l'IFRAN pour sécuriser le budget de fonctionnement annuel.\n" +
-    "4. Renforcer le partenariat institutionnel entre le BDE et la Direction pour faciliter l'octroi des autorisations et la réservation des infrastructures.";
-
   const defaultConclusion = 
     "Ce mandat aura prouvé la vitalité, l'ingéniosité et l'esprit de corps qui animent les étudiants de l'IFRAN. Nous adressons nos remerciements les plus sincères à la Direction de l'IFRAN, aux enseignants, au personnel administratif et à l'ensemble des délégués et responsables de clubs. Nous transmettons aujourd'hui un Bureau structuré, doté d'outils modernes et d'un bilan financier transparent, prêt à être porté encore plus haut par la future génération.";
 
@@ -134,8 +123,6 @@ const AdminMandateReport: React.FC = () => {
   const [submissionDate, setSubmissionDate] = useState(() => localStorage.getItem('mandate_sub_date') || defaultSubmissionDate);
   const [recipient, setRecipient] = useState(() => localStorage.getItem('mandate_recipient') || defaultRecipient);
   const [moralReport, setMoralReport] = useState(() => localStorage.getItem('mandate_moral_report') || defaultMoralReport);
-  const [challenges, setChallenges] = useState(() => localStorage.getItem('mandate_challenges') || defaultChallenges);
-  const [recommendations, setRecommendations] = useState(() => localStorage.getItem('mandate_recommendations') || defaultRecommendations);
   const [conclusion, setConclusion] = useState(() => localStorage.getItem('mandate_conclusion') || defaultConclusion);
 
   // Load live data from dataService
@@ -191,8 +178,6 @@ const AdminMandateReport: React.FC = () => {
     localStorage.setItem('mandate_sub_date', submissionDate);
     localStorage.setItem('mandate_recipient', recipient);
     localStorage.setItem('mandate_moral_report', moralReport);
-    localStorage.setItem('mandate_challenges', challenges);
-    localStorage.setItem('mandate_recommendations', recommendations);
     localStorage.setItem('mandate_conclusion', conclusion);
 
     setIsEditModalOpen(false);
@@ -200,37 +185,25 @@ const AdminMandateReport: React.FC = () => {
     setTimeout(() => setSaveSuccessNotification(false), 3000);
   };
 
-  // Financial aggregates conforming strictly to real facts:
-  // - No cantine (money belongs to the canteen vendor, not the BDE)
-  // - No operational expenses (0 FCFA)
-  // - Only Assinie student contributions (voluntary, non mandatory)
-  // - Cinema: no contributions, funded directly from own pocket (at least 15 000 FCFA)
+  // Financial aggregates strictly conforming to President's mandate facts:
+  // - Cotisations Assinie recensées : 135 000 FCFA
+  // - Dépenses directes Assinie : 135 000 FCFA (utilisées directement pour faire la sortie, non conservées)
+  // - Cinéma : argent retiré de notre propre poche (-15 000 FCFA sur fonds propres, aucune cotisation perçue)
+  // - Solde de trésorerie transmis au futur Bureau : 0 FCFA (aucun reliquat)
   const financialStats = useMemo(() => {
-    const paidStudents = students.filter(s => s.hasPaid);
-    const totalCotisationsAssinie = paidStudents.reduce((acc, s) => acc + (s.amount || 0), 0);
-    
-    // Autofinancement / Avance sur fonds propres de la poche du bureau
-    const cinemaBureauContribution = 15000;
-    
-    // Total des ressources mobilisées (Assinie + Avance du bureau)
-    const consolidatedRevenue = totalCotisationsAssinie + cinemaBureauContribution;
-    
-    // Aucune dépense opérationnelle déduite (0 FCFA)
-    const estimatedExpenses = 0;
-    
-    // Solde de trésorerie net transmis au prochain bureau
-    const treasuryBalance = consolidatedRevenue;
+    const cotisationsAssinie = 135000;
+    const depensesAssinie = 135000;
+    const cinemaBureauDebit = 15000; // Argent retiré de notre poche
+    const treasuryBalance = 0; // Aucun reliquat conservé
 
     return {
-      totalCotisations: totalCotisationsAssinie,
-      paidCount: paidStudents.length,
-      totalStudents: students.length,
-      cinemaBureauContribution,
-      consolidatedRevenue,
-      estimatedExpenses,
+      totalCotisations: cotisationsAssinie,
+      depensesAssinie,
+      cinemaBureauDebit,
+      consolidatedRevenue: cotisationsAssinie,
       treasuryBalance,
     };
-  }, [students]);
+  }, []);
 
   // Key pillars data
   const pillars = useMemo(() => [
@@ -238,7 +211,7 @@ const AdminMandateReport: React.FC = () => {
       title: "1. Animation & Grands Événements Fédérateurs",
       icon: Calendar,
       achievements: [
-        "Organisation d'événements majeurs (Projections Cinéma BDE autofinancées, Sorties détentes à Assinie avec cotisations volontaires, Soirées et animations).",
+        "Organisation d'événements majeurs (Projections Cinéma BDE autofinancées sur fonds propres du Bureau, Sortie détente à Assinie financée par les participants, Soirées et animations).",
         "Maintien d'un calendrier régulier d'animation de la vie étudiante accessible à toutes les filières de l'IFRAN.",
         "Renforcement du sentiment d'appartenance et de la cohésion inter-promotions."
       ]
@@ -257,8 +230,8 @@ const AdminMandateReport: React.FC = () => {
       icon: TrendingUp,
       achievements: [
         "Développement et déploiement d'une plateforme web complète (BDE Connect) pour l'agenda, les inscriptions et la billetterie.",
-        `Lancement du module Cantine Connectée ayant géré ${foodOrders.length} commandes en ligne pour fluidifier la restauration (recettes gérées par la prestataire).`,
-        "Automatisation de la gestion des listes de cotisations et des comptes-rendus administratifs."
+        `Lancement du module Cantine Connectée ayant géré ${foodOrders.length} commandes en ligne pour fluidifier la restauration (recettes gérées par la prestataire indépendante).`,
+        "Automatisation de la gestion des listes et des comptes-rendus administratifs."
       ]
     },
     {
@@ -274,9 +247,9 @@ const AdminMandateReport: React.FC = () => {
       title: "5. Rigueur de Gestion & Transparence Financière",
       icon: DollarSign,
       achievements: [
-        `${financialStats.totalCotisations.toLocaleString()} FCFA collectés au titre des cotisations volontaires pour la sortie Assinie.`,
-        `${financialStats.cinemaBureauContribution.toLocaleString()} FCFA financés sur fonds propres par le Bureau pour les projections cinéma.`,
-        `Solde net de ${financialStats.treasuryBalance.toLocaleString()} FCFA transmis pour assurer la passation avec le futur bureau.`
+        `${financialStats.totalCotisations.toLocaleString()} FCFA de cotisations recensées pour la sortie Assinie et intégralement affectées au séjour des étudiants.`,
+        `15 000 FCFA déboursés directement sur les fonds personnels du Bureau pour l'organisation des séances cinéma.`,
+        `Solde de trésorerie net clôturé à 0 FCFA (aucune dette, aucun reliquat non affecté).`
       ]
     }
   ], [clubs, ateliers, foodOrders, financialStats]);
@@ -336,18 +309,16 @@ const AdminMandateReport: React.FC = () => {
         })),
         finances: {
           totalCollectedCotisations: financialStats.totalCotisations,
-          contributorsCount: financialStats.paidCount,
-          cinemaBureauContribution: financialStats.cinemaBureauContribution,
+          contributorsCount: students.filter(s => s.hasPaid).length || 1,
+          cinemaBureauContribution: financialStats.cinemaBureauDebit,
           totalConsolidatedRevenue: financialStats.consolidatedRevenue,
-          estimatedExpenses: 0,
-          treasuryBalance: financialStats.treasuryBalance
+          estimatedExpenses: financialStats.depensesAssinie,
+          treasuryBalance: 0
         },
         logoDataUrl,
         prospectsCount: prospects.length,
         sentProspectsCount: prospects.filter(p => p.status === 'sent').length,
         canteenOrdersCount: foodOrders.length,
-        challengesFaced: challenges,
-        recommendations,
         conclusion
       };
 
@@ -370,7 +341,7 @@ const AdminMandateReport: React.FC = () => {
     <AdminLayout>
       <div className="space-y-6 pb-16">
         
-        {/* 1. TOP EXECUTIVE ACTION BAR (SEPARATED FROM THE OFFICIAL TITLE FOR OPTIMAL AIRINESS) */}
+        {/* 1. TOP EXECUTIVE ACTION BAR (WELL SEPARATED FROM THE OFFICIAL TITLE) */}
         <div className="bg-gradient-to-r from-bde-navy via-slate-900 to-indigo-950 rounded-2xl p-6 sm:p-7 text-white shadow-xl border border-white/10 relative overflow-hidden mb-8">
           <div className="absolute right-0 top-0 w-96 h-96 bg-bde-rose/10 rounded-full blur-3xl pointer-events-none" />
           
@@ -404,7 +375,7 @@ const AdminMandateReport: React.FC = () => {
               <button
                 onClick={() => setIsEditModalOpen(true)}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs sm:text-sm font-semibold transition border border-white/15"
-                title="Modifier les textes officiels, le mot du président et les signataires"
+                title="Modifier les textes officiels et le mot du président"
               >
                 <Edit3 size={16} />
                 <span>Personnaliser</span>
@@ -448,7 +419,7 @@ const AdminMandateReport: React.FC = () => {
           </div>
         )}
 
-        {/* 2. OFFICIAL INSTITUTIONAL HEADER & TITLE (WELL-AERATED WITH THE SCHOOL LOGO EMBEDDED) */}
+        {/* 2. OFFICIAL INSTITUTIONAL HEADER & TITLE WITH SCHOOL LOGO */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-100 dark:border-slate-700/80 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-2 flex items-center justify-center shrink-0 shadow-inner">
@@ -476,7 +447,7 @@ const AdminMandateReport: React.FC = () => {
         </div>
 
         {/* 3. KEY METRICS CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 text-xs font-medium mb-1">
               <span>Événements</span>
@@ -512,51 +483,38 @@ const AdminMandateReport: React.FC = () => {
               {financialStats.totalCotisations.toLocaleString()} F
             </div>
             <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-              Cotisations volontaires
+              100% utilisé pour la sortie
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 text-xs font-medium mb-1">
-              <span>Cinéma (Bureau)</span>
-              <HeartHandshake size={16} className="text-blue-500" />
+              <span>Cinéma (Poche Bureau)</span>
+              <HeartHandshake size={16} className="text-rose-500" />
+            </div>
+            <div className="text-xl font-extrabold text-rose-600 dark:text-rose-400 tabular-nums truncate">
+              -15 000 F
+            </div>
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+              Argent retiré / Débit net
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/60">
+            <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 text-xs font-medium mb-1">
+              <span>Solde Transmis</span>
+              <TrendingUp size={16} className="text-slate-500" />
             </div>
             <div className="text-xl font-extrabold text-bde-navy dark:text-white tabular-nums truncate">
-              {financialStats.cinemaBureauContribution.toLocaleString()} F
+              0 F
             </div>
             <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-              Apport de notre poche
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/60">
-            <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 text-xs font-medium mb-1">
-              <span>Total Mobilisé</span>
-              <TrendingUp size={16} className="text-indigo-500" />
-            </div>
-            <div className="text-xl font-extrabold text-bde-navy dark:text-white tabular-nums truncate">
-              {financialStats.consolidatedRevenue.toLocaleString()} F
-            </div>
-            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-              Fonds gérés & injectés
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/60">
-            <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 text-xs font-medium mb-1">
-              <span>Équipe BDE</span>
-              <Users size={16} className="text-teal-500" />
-            </div>
-            <div className="text-2xl font-extrabold text-bde-navy dark:text-white tabular-nums">
-              {members.length > 0 ? members.length : 8}
-            </div>
-            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-              Membres du bureau
+              Fonds 100% consommés
             </div>
           </div>
         </div>
 
-        {/* 4. NAVIGATION TABS */}
+        {/* 4. NAVIGATION TABS (WITHOUT RECOMMENDATIONS/SIGNATURES) */}
         <div className="border-b border-gray-200 dark:border-slate-700 flex overflow-x-auto no-scrollbar gap-2 mb-6">
           <button
             onClick={() => setActiveTab('overview')}
@@ -612,20 +570,9 @@ const AdminMandateReport: React.FC = () => {
           >
             Innovation Digitale & Services
           </button>
-
-          <button
-            onClick={() => setActiveTab('recommendations')}
-            className={`py-3 px-4 font-semibold text-sm whitespace-nowrap border-b-2 transition ${
-              activeTab === 'recommendations'
-                ? 'border-bde-rose text-bde-rose dark:text-rose-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-            }`}
-          >
-            Recommandations & Signatures
-          </button>
         </div>
 
-        {/* TAB 1: OVERVIEW & SPEECH (PRESIDENT SPEECH KEPT INTACT) */}
+        {/* TAB 1: OVERVIEW & SPEECH (PRESIDENT SPEECH KEPT EXACTLY AS CURRENTLY TYPED) */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
             <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-100 dark:border-slate-700">
@@ -644,7 +591,7 @@ const AdminMandateReport: React.FC = () => {
                 </button>
               </div>
 
-              {/* Exact President opening statement preserved */}
+              {/* Exact President opening statement preserved without any alteration */}
               <div className="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 text-sm sm:text-base leading-relaxed whitespace-pre-line bg-gray-50 dark:bg-slate-900/50 p-6 rounded-xl border border-gray-100 dark:border-slate-800">
                 {moralReport}
               </div>
@@ -709,7 +656,7 @@ const AdminMandateReport: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 2: EVENTS & ACTIVITIES (HEADER REPLACED WITH 'Description', TEXT SANITIZED & OVERFLOW FIXED) */}
+        {/* TAB 2: EVENTS & ACTIVITIES (HEADER 'Description', SANITIZED TEXT & CONTROLLED WRAPPING) */}
         {activeTab === 'events' && (
           <div className="space-y-6">
             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
@@ -831,61 +778,61 @@ const AdminMandateReport: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: FINANCES (NO CANTEEN, NO OPERATIONAL EXPENSES, CLEAN NON-OVERFLOWING NUMBERS) */}
+        {/* TAB 3: FINANCES (RECENSEMENT DES PAIEMENTS, ASSINIE 100% UTILISÉE, CINÉMA EN DÉBIT, SOLDE TRANSMIS = 0) */}
         {activeTab === 'finances' && (
           <div className="space-y-6">
             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
               <div className="border-b border-gray-100 dark:border-slate-700 pb-4 mb-6">
                 <span className="text-xs uppercase tracking-widest text-bde-rose font-bold">Section 4 · Trésorerie & Comptabilité</span>
                 <h2 className="text-xl font-extrabold text-bde-navy dark:text-white mt-1">
-                  Bilan Financier Consolidé & Gestion des Ressources
+                  Bilan Financier & Recensement des Flux
                 </h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Récapitulatif fidèle des flux financiers gérés directement par le Bureau des Étudiants.
+                  Recensement des cotisations perçues pour Assinie et des fonds personnels déboursés par le Bureau.
                 </p>
               </div>
 
               {/* Financial Highlights Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-blue-50 dark:bg-blue-950/30 p-5 rounded-xl border border-blue-200 dark:border-blue-900/50">
-                  <div className="text-xs font-bold uppercase text-blue-700 dark:text-blue-300">Cotisations Sortie Assinie</div>
+                  <div className="text-xs font-bold uppercase text-blue-700 dark:text-blue-300">Cotisations Assinie (Recensées)</div>
                   <div className="text-2xl font-extrabold text-blue-900 dark:text-blue-100 tabular-nums mt-1">
-                    {financialStats.totalCotisations.toLocaleString()} FCFA
+                    135 000 FCFA
                   </div>
                   <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    Participation volontaire des inscrits
+                    100% utilisé pour faire la sortie (non conservé)
                   </div>
                 </div>
 
-                <div className="bg-indigo-50 dark:bg-indigo-950/30 p-5 rounded-xl border border-indigo-200 dark:border-indigo-900/50">
-                  <div className="text-xs font-bold uppercase text-indigo-700 dark:text-indigo-300">Apport Propre Bureau Cinéma</div>
-                  <div className="text-2xl font-extrabold text-indigo-900 dark:text-indigo-100 tabular-nums mt-1">
-                    {financialStats.cinemaBureauContribution.toLocaleString()} FCFA
+                <div className="bg-rose-50 dark:bg-rose-950/30 p-5 rounded-xl border border-rose-200 dark:border-rose-900/50">
+                  <div className="text-xs font-bold uppercase text-rose-700 dark:text-rose-300">Cinéma (Argent retiré de notre poche)</div>
+                  <div className="text-2xl font-extrabold text-rose-700 dark:text-rose-300 tabular-nums mt-1">
+                    -15 000 FCFA
                   </div>
-                  <div className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">
-                    Frais avancés de notre poche (sans cotisation)
+                  <div className="text-xs text-rose-600 dark:text-rose-400 mt-1">
+                    Pris sur nos propres fonds (aucune cotisation)
                   </div>
                 </div>
 
-                <div className="bg-emerald-50 dark:bg-emerald-950/30 p-5 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
-                  <div className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">Solde de Trésorerie Transmis</div>
-                  <div className="text-2xl font-extrabold text-emerald-900 dark:text-emerald-100 tabular-nums mt-1">
-                    {financialStats.treasuryBalance.toLocaleString()} FCFA
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">Solde Transmis à la Trésorerie</div>
+                  <div className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tabular-nums mt-1">
+                    0 FCFA
                   </div>
-                  <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                    Totalité des fonds mobilisés transmise
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Fonds entièrement consommés sur les activités
                   </div>
                 </div>
               </div>
 
-              {/* Consolidated Accounting Table without any numbers overflowing */}
+              {/* Consolidated Accounting Table */}
               <div className="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-xl">
                 <table className="w-full text-left text-xs sm:text-sm">
                   <thead className="bg-slate-100 dark:bg-slate-900 text-gray-700 dark:text-gray-300 text-xs uppercase tracking-wider">
                     <tr>
-                      <th className="p-3.5 font-bold w-2/5 min-w-[200px]">Poste Budgétaire</th>
-                      <th className="p-3.5 font-bold w-2/5 min-w-[260px]">Précisions & Modalités de Gestion</th>
-                      <th className="p-3.5 font-bold w-1/5 min-w-[140px] text-right">Montant Réalisé</th>
+                      <th className="p-3.5 font-bold w-2/5 min-w-[200px]">Poste & Activité</th>
+                      <th className="p-3.5 font-bold w-2/5 min-w-[260px]">Précisions & Affectation des Fonds</th>
+                      <th className="p-3.5 font-bold w-1/5 min-w-[140px] text-right">Montant (FCFA)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
@@ -894,46 +841,58 @@ const AdminMandateReport: React.FC = () => {
                         Cotisations Sortie Assinie
                       </td>
                       <td className="p-3.5 text-gray-600 dark:text-gray-300">
-                        Participation volontaire des étudiants pour la sortie détente (non obligatoire — seuls ceux qui voulaient partir ont cotisé et sont partis)
+                        Recensement des cotisations volontaires versées par les étudiants pour la sortie détente (non obligatoire)
                       </td>
                       <td className="p-3.5 font-mono font-bold text-right tabular-nums whitespace-nowrap text-emerald-600 dark:text-emerald-400">
-                        {financialStats.totalCotisations.toLocaleString()} FCFA
+                        +135 000 FCFA
                       </td>
                     </tr>
 
                     <tr className="hover:bg-gray-50 dark:hover:bg-slate-750">
                       <td className="p-3.5 font-semibold text-gray-900 dark:text-white">
-                        Billetterie & Projections Cinéma (Fonds propres)
+                        Dépenses Logistique Sortie Assinie
                       </td>
                       <td className="p-3.5 text-gray-600 dark:text-gray-300">
-                        Aucune cotisation étudiante perçue — Frais pris en charge directement de notre poche par les membres du Bureau pour l'organisation et la logistique
+                        Utilisation directe et intégrale des cotisations pour financer le transport, le séjour et les activités
                       </td>
-                      <td className="p-3.5 font-mono font-bold text-right tabular-nums whitespace-nowrap text-indigo-600 dark:text-indigo-400">
-                        {financialStats.cinemaBureauContribution.toLocaleString()} FCFA
+                      <td className="p-3.5 font-mono font-bold text-right tabular-nums whitespace-nowrap text-rose-600 dark:text-rose-400">
+                        -135 000 FCFA
+                      </td>
+                    </tr>
+
+                    <tr className="hover:bg-gray-50 dark:hover:bg-slate-750">
+                      <td className="p-3.5 font-semibold text-gray-900 dark:text-white">
+                        Projections Cinéma BDE (Fonds personnels)
+                      </td>
+                      <td className="p-3.5 text-gray-600 dark:text-gray-300">
+                        Aucune cotisation perçue des étudiants — Argent retiré de notre propre poche par le Bureau pour financer la projection
+                      </td>
+                      <td className="p-3.5 font-mono font-bold text-right tabular-nums whitespace-nowrap text-rose-600 dark:text-rose-400">
+                        -15 000 FCFA
                       </td>
                     </tr>
 
                     <tr className="bg-blue-50/70 dark:bg-blue-950/20 font-bold">
                       <td className="p-3.5 text-blue-900 dark:text-blue-100">
-                        TOTAL DES RESSOURCES MOBILISÉES
+                        TOTAL DES COTISATIONS RECENSÉES
                       </td>
                       <td className="p-3.5 text-blue-800 dark:text-blue-200">
-                        Total des fonds gérés et injectés par le BDE dans la vie étudiante
+                        Totalité des fonds collectés auprès des étudiants (exclusivement pour la sortie Assinie)
                       </td>
                       <td className="p-3.5 font-mono text-right tabular-nums whitespace-nowrap text-blue-900 dark:text-blue-100">
-                        {financialStats.consolidatedRevenue.toLocaleString()} FCFA
+                        135 000 FCFA
                       </td>
                     </tr>
 
-                    <tr className="bg-emerald-50/80 dark:bg-emerald-950/30 font-bold border-t-2 border-emerald-500/30">
-                      <td className="p-3.5 text-emerald-900 dark:text-emerald-100">
-                        SOLDE DE TRÉSORERIE TRANSMIS
+                    <tr className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2 border-slate-300 dark:border-slate-700">
+                      <td className="p-3.5 text-gray-800 dark:text-gray-200">
+                        SOLDE DE TRÉSORERIE TRANSMIS AU FUTUR BUREAU
                       </td>
-                      <td className="p-3.5 text-emerald-800 dark:text-emerald-200">
-                        Trésorerie nette disponible transmise lors de la passation de service au futur Bureau
+                      <td className="p-3.5 text-gray-600 dark:text-gray-400">
+                        Aucun reliquat conservé — Les cotisations ont été 100% consommées par la sortie et le cinéma a été pris sur nos poches
                       </td>
-                      <td className="p-3.5 font-mono text-right tabular-nums whitespace-nowrap text-emerald-700 dark:text-emerald-300">
-                        + {financialStats.treasuryBalance.toLocaleString()} FCFA
+                      <td className="p-3.5 font-mono text-right tabular-nums whitespace-nowrap text-gray-700 dark:text-gray-300">
+                        0 FCFA
                       </td>
                     </tr>
                   </tbody>
@@ -942,8 +901,9 @@ const AdminMandateReport: React.FC = () => {
 
               {/* Clarification notes */}
               <div className="mt-4 p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <div>• <strong>Cantine & Restauration</strong> : Le service digital a été conçu par le BDE pour fluidifier les précommandes, mais l'ensemble des recettes est encaissé directement par la prestataire de cantine indépendante (aucun fond BDE).</div>
-                <div>• <strong>Dépenses de fonctionnement</strong> : Aucune dépense opérationnelle ou de matériel n'a été imputée au compte BDE.</div>
+                <div>• <strong>Sortie Assinie</strong> : Les 135 000 FCFA perçus n'ont pas été stockés en trésorerie mais immédiatement dépensés pour payer les frais réels du voyage.</div>
+                <div>• <strong>Projections Cinéma</strong> : L'organisation a constitué un apport négatif (prise en charge sur les fonds propres des membres du Bureau, sans cotisation étudiante).</div>
+                <div>• <strong>Cantine</strong> : Recettes encaissées directement par la prestataire de restauration indépendante.</div>
               </div>
             </div>
           </div>
@@ -1098,100 +1058,6 @@ const AdminMandateReport: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 6: RECOMMENDATIONS & SIGNATURES */}
-        {activeTab === 'recommendations' && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-8">
-              <div>
-                <span className="text-xs uppercase tracking-widest text-bde-rose font-bold">Section 7 · Passation & Recommandations</span>
-                <h2 className="text-xl font-extrabold text-bde-navy dark:text-white mt-1">
-                  Recommandations Stratégiques pour l'Administration et la Relève
-                </h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Enseignements tirés et préconisations pour assurer la continuité de l'excellence de la vie étudiante.
-                </p>
-              </div>
-
-              {/* Challenges */}
-              <div className="bg-amber-50/50 dark:bg-amber-950/20 p-5 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
-                <h3 className="font-bold text-amber-900 dark:text-amber-200 text-sm mb-2 flex items-center gap-2">
-                  <AlertCircle size={16} />
-                  <span>Difficultés & Contraintes Rencontrées</span>
-                </h3>
-                <div className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 leading-relaxed whitespace-pre-line break-words">
-                  {challenges}
-                </div>
-              </div>
-
-              {/* Recommendations */}
-              <div className="bg-blue-50/50 dark:bg-blue-950/20 p-5 rounded-xl border border-blue-200/60 dark:border-blue-900/40">
-                <h3 className="font-bold text-blue-900 dark:text-blue-200 text-sm mb-2 flex items-center gap-2">
-                  <Sparkles size={16} />
-                  <span>Propositions Soumises à la Direction de l'IFRAN</span>
-                </h3>
-                <div className="text-xs sm:text-sm text-blue-800 dark:text-blue-300 leading-relaxed whitespace-pre-line break-words">
-                  {recommendations}
-                </div>
-              </div>
-
-              {/* Conclusion */}
-              <div>
-                <h3 className="font-bold text-gray-900 dark:text-white text-base mb-2">
-                  Mot de Conclusion du Président
-                </h3>
-                <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-line p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 break-words">
-                  {conclusion}
-                </div>
-              </div>
-
-              {/* Official Signature Blocks */}
-              <div className="pt-6 border-t border-gray-200 dark:border-slate-700">
-                <h3 className="text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400 font-bold mb-6">
-                  Émargements & Visas Officiels de Dépôt
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  {/* Block 1: President */}
-                  <div className="p-5 rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-700 text-center flex flex-col justify-between h-44">
-                    <div>
-                      <div className="text-xs uppercase font-bold text-gray-500">Pour le Bureau des Étudiants</div>
-                      <div className="font-bold text-gray-900 dark:text-white text-sm mt-1">{presidentName}</div>
-                      <div className="text-xs text-bde-rose font-medium">Président du BDE</div>
-                    </div>
-                    <div className="text-[11px] text-gray-400 border-t border-gray-200 dark:border-slate-800 pt-2">
-                      Signature & Date
-                    </div>
-                  </div>
-
-                  {/* Block 2: Treasurer */}
-                  <div className="p-5 rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-700 text-center flex flex-col justify-between h-44">
-                    <div>
-                      <div className="text-xs uppercase font-bold text-gray-500">Pour la Trésorerie</div>
-                      <div className="font-bold text-gray-900 dark:text-white text-sm mt-1">Le Trésorier Général</div>
-                      <div className="text-xs text-emerald-600 font-medium">Visa de conformité comptable</div>
-                    </div>
-                    <div className="text-[11px] text-gray-400 border-t border-gray-200 dark:border-slate-800 pt-2">
-                      Signature & Date
-                    </div>
-                  </div>
-
-                  {/* Block 3: Administration */}
-                  <div className="p-5 rounded-xl border-2 border-dashed border-indigo-300 dark:border-indigo-900/60 bg-indigo-50/30 dark:bg-indigo-950/10 text-center flex flex-col justify-between h-44">
-                    <div>
-                      <div className="text-xs uppercase font-bold text-indigo-700 dark:text-indigo-400">Pour l'Administration IFRAN</div>
-                      <div className="font-bold text-gray-900 dark:text-white text-sm mt-1">Direction des Études</div>
-                      <div className="text-xs text-indigo-600 font-medium">Accusé de réception officiel</div>
-                    </div>
-                    <div className="text-[11px] text-gray-400 border-t border-indigo-200 dark:border-indigo-900/40 pt-2">
-                      Cachet de l'Institut & Visa
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
       </div>
 
       {/* EDIT MODAL / DRAWER FOR CUSTOMIZING MANDATE METADATA */}
@@ -1314,34 +1180,10 @@ const AdminMandateReport: React.FC = () => {
 
               <div>
                 <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Difficultés & Contraintes Rencontrées
-                </label>
-                <textarea
-                  rows={2}
-                  value={challenges}
-                  onChange={(e) => setChallenges(e.target.value)}
-                  className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-bde-rose"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Recommandations pour l'Administration et la Relève
-                </label>
-                <textarea
-                  rows={3}
-                  value={recommendations}
-                  onChange={(e) => setRecommendations(e.target.value)}
-                  className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-bde-rose"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
                   Conclusion du Mandat
                 </label>
                 <textarea
-                  rows={2}
+                  rows={3}
                   value={conclusion}
                   onChange={(e) => setConclusion(e.target.value)}
                   className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-bde-rose"

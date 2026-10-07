@@ -527,14 +527,13 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
 
   // Key KPI Cards (4 cards in a row)
   const cardWidth = (contentWidth - 9) / 4;
-  const cinemaFondsPropres = data.finances.cinemaBureauContribution || 15000;
-  const totalMobilise = data.finances.totalCollectedCotisations + cinemaFondsPropres;
+  const cotisationsAssinie = data.finances.totalCollectedCotisations || 135000;
 
   const kpis = [
-    { label: "Événements Réalisés", value: `${data.events.length}`, sub: "Mobilisations globales" },
+    { label: "Événements Réalisés", value: `${data.events.length}`, sub: "Actions campus" },
     { label: "Clubs & Ateliers", value: `${data.clubsCount + data.ateliersCount}`, sub: `${data.clubsCount} clubs · ${data.ateliersCount} ateliers` },
-    { label: "Cotisations Assinie", value: `${data.finances.totalCollectedCotisations.toLocaleString()} F`, sub: "Participation volontaire" },
-    { label: "Total Fonds Mobilisés", value: `${totalMobilise.toLocaleString()} F`, sub: "Assinie + Apport bureau" },
+    { label: "Cotisations Assinie", value: `${cotisationsAssinie.toLocaleString()} F`, sub: "100% utilisé pour la sortie" },
+    { label: "Cinéma (Poche Bureau)", value: "-15 000 F", sub: "Argent retiré / Fonds propres" },
   ];
 
   kpis.forEach((kpi, idx) => {
@@ -768,40 +767,45 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
 
   y = (doc as any).lastAutoTable.finalY + 8;
 
-  // Section 5 : Bilan Financier Consolidé (Sans cantine ni fausses dépenses opérationnelles)
+  // Section 5 : Bilan Financier & Ressources (Conforme aux flux réels du mandat)
   checkHeight(22);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 30, 58);
-  doc.text("5. BILAN FINANCIER CONSOLIDÉ & GESTION DES RESSOURCES", margin, y);
+  doc.text("5. BILAN FINANCIER & GESTION DES RESSOURCES DU MANDAT", margin, y);
   y += 2;
 
   const financeTableData = [
     [
       'Cotisations Sortie Assinie',
-      'Participation volontaire des étudiants pour la sortie détente (non obligatoire)',
-      `${data.finances.totalCollectedCotisations.toLocaleString()} FCFA`,
+      'Recensement des cotisations volontaires versées par les étudiants pour la sortie détente (non obligatoire)',
+      `+${cotisationsAssinie.toLocaleString()} FCFA`,
+    ],
+    [
+      'Dépenses Logistique Sortie Assinie',
+      'Utilisation directe et intégrale des cotisations pour financer le transport, le séjour et les activités',
+      `-${cotisationsAssinie.toLocaleString()} FCFA`,
     ],
     [
       'Projections Cinéma BDE (Fonds propres)',
-      'Apport direct des membres du Bureau (frais pris sur notre poche, sans cotisation)',
-      `${cinemaFondsPropres.toLocaleString()} FCFA`,
+      'Aucune cotisation perçue des étudiants — Argent retiré de la poche du Bureau pour organiser la projection',
+      '-15 000 FCFA',
     ],
     [
-      'TOTAL DES RESSOURCES MOBILISÉES',
-      'Fonds totaux gérés et injectés par le BDE dans la vie étudiante',
-      `${totalMobilise.toLocaleString()} FCFA`,
+      'TOTAL DES COTISATIONS RECENSÉES',
+      'Totalité des fonds collectés auprès des étudiants (exclusivement pour la sortie Assinie)',
+      `${cotisationsAssinie.toLocaleString()} FCFA`,
     ],
     [
       'SOLDE DE TRÉSORERIE TRANSMIS',
-      'Fonds disponibles pour la passation de service au futur Bureau',
-      `${(data.finances.treasuryBalance ?? totalMobilise).toLocaleString()} FCFA`,
+      'Aucun reliquat — Cotisations 100% consommées par la sortie et cinéma pris sur nos fonds personnels',
+      '0 FCFA',
     ],
   ];
 
   autoTable(doc, {
     startY: y + 2,
-    head: [['Poste Budgétaire', 'Détail / Précision de gestion', 'Montant (FCFA)']],
+    head: [['Poste & Activité', 'Précisions & Affectation des Fonds', 'Montant (FCFA)']],
     body: financeTableData,
     theme: 'grid',
     headStyles: {
@@ -815,20 +819,29 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
       cellPadding: 2.5,
     },
     columnStyles: {
-      0: { cellWidth: 62, fontStyle: 'bold' },
-      1: { cellWidth: 72 },
-      2: { cellWidth: 48, halign: 'right', fontStyle: 'bold' },
+      0: { cellWidth: 58, fontStyle: 'bold' },
+      1: { cellWidth: 78 },
+      2: { cellWidth: 46, halign: 'right', fontStyle: 'bold' },
     },
     didParseCell: (hookData) => {
       if (hookData.section === 'body') {
-        if (hookData.row.index === 2) {
-          // Total mobilise
+        if (hookData.row.index === 0) {
+          // Cotisations Assinie
+          hookData.cell.styles.fillColor = [240, 253, 244];
+        } else if (hookData.row.index === 1 || hookData.row.index === 2) {
+          // Depenses Assinie et Cinema
+          hookData.cell.styles.fillColor = [254, 242, 242];
+          if (hookData.column.index === 2) {
+            hookData.cell.styles.textColor = [185, 28, 28];
+          }
+        } else if (hookData.row.index === 3) {
+          // Total encaisse
           hookData.cell.styles.fillColor = [224, 242, 254];
           hookData.cell.styles.textColor = [3, 105, 161];
-        } else if (hookData.row.index === 3) {
+        } else if (hookData.row.index === 4) {
           // Solde tresorerie
-          hookData.cell.styles.fillColor = [236, 253, 245];
-          hookData.cell.styles.textColor = [6, 95, 70];
+          hookData.cell.styles.fillColor = [241, 245, 249];
+          hookData.cell.styles.textColor = [51, 65, 85];
         }
       }
     },
@@ -864,110 +877,6 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
       y += 4.5;
     });
   });
-
-  y += 5;
-
-  // Section 7 : Difficultés & Recommandations (AVEC PAGE BREAK DE SÉCURITÉ)
-  if (y + 40 > pageHeight - 20) {
-    doc.addPage();
-    y = 20;
-  }
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(15, 30, 58);
-  doc.text("7. DIFFICULTÉS RENCONTRÉES & RECOMMANDATIONS POUR L'ADMINISTRATION", margin, y);
-  y += 5;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(51, 65, 85);
-
-  const recoText = data.recommendations ||
-    "1. Poursuivre l'accompagnement institutionnel et logistique des initiatives portées par les clubs.\n" +
-    "2. Sanctuariser les créneaux dédiés aux Ateliers Afternoon dans l'emploi du temps pédagogique.\n" +
-    "3. Consolider la collecte précoce des cotisations dès la rentrée afin de sécuriser le calendrier événementiel.\n" +
-    "4. Maintenir et enrichir les outils digitaux développés (cantine, plateforme BDE, relances).";
-
-  const recoLines = doc.splitTextToSize(recoText, contentWidth);
-  recoLines.forEach((line: string) => {
-    checkHeight(5);
-    doc.text(line, margin, y);
-    y += 4;
-  });
-
-  y += 5;
-
-  // Section 8 : Conclusion
-  if (y + 35 > pageHeight - 20) {
-    doc.addPage();
-    y = 20;
-  }
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(15, 30, 58);
-  doc.text("8. CONCLUSION DU MANDAT", margin, y);
-  y += 5;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(51, 65, 85);
-  const conclLines = doc.splitTextToSize(
-    data.conclusion ||
-    "Ce mandat a été une aventure humaine et collective d'une richesse exceptionnelle. Nous exprimons notre profonde gratitude à la Direction Générale de l'IFRAN, au corps professoral et à l'ensemble des étudiants pour leur confiance sans faille. Nous transmettons un bureau structuré, des finances saines et des projets pérennes pour le rayonnement continu de l'IFRAN.",
-    contentWidth
-  );
-  conclLines.forEach((line: string) => {
-    checkHeight(5);
-    doc.text(line, margin, y);
-    y += 4.5;
-  });
-
-  y += 6;
-
-  // Section 9 : Signatures & Visa Officiels (TOUJOURS GROUPÉES SANS DÉBORDEMENT)
-  if (y + 50 > pageHeight - 15) {
-    doc.addPage();
-    y = 20;
-  }
-  doc.setDrawColor(203, 213, 225);
-  doc.line(margin, y, margin + contentWidth, y);
-  y += 5;
-
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(15, 30, 58);
-  doc.text("EMARGEMENTS & VISAS OFFICIELS DE DÉPÔT", margin, y);
-  y += 6;
-
-  const colW = contentWidth / 3;
-
-  // Col 1 : President
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text("Pour le Bureau des Étudiants :", margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(data.presidentName, margin, y + 4);
-  doc.setFont('helvetica', 'italic');
-  doc.text("Président du BDE", margin, y + 8);
-  doc.text("Signature & Date :", margin, y + 14);
-
-  // Col 2 : Trésorier
-  doc.setFont('helvetica', 'bold');
-  doc.text("Pour la Trésorerie Générale :", margin + colW, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text("Le Trésorier du BDE", margin + colW, y + 4);
-  doc.setFont('helvetica', 'italic');
-  doc.text("Visa de conformité comptable", margin + colW, y + 8);
-  doc.text("Signature & Date :", margin + colW, y + 14);
-
-  // Col 3 : Administration IFRAN
-  doc.setFont('helvetica', 'bold');
-  doc.text("Pour l'Administration IFRAN :", margin + colW * 2, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text("Direction des Études & Vie Étudiante", margin + colW * 2, y + 4);
-  doc.setFont('helvetica', 'italic');
-  doc.text("Accusé de réception & Visa", margin + colW * 2, y + 8);
-  doc.text("Cachet & Signature :", margin + colW * 2, y + 14);
 
   // Page Numbers & Running Headers
   const totalPages = doc.getNumberOfPages();
