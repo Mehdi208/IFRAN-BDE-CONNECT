@@ -472,7 +472,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text("INSTITUT AFRICAIN DE FORMATION ET DE TECHNOLOGIE (IFRAN)", textStartX, y + 8);
+  doc.text("INSTITUT FRANÇAIS DU NUMÉRIQUE (IFRAN)", textStartX, y + 8);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
@@ -532,7 +532,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   const kpis = [
     { label: "Événements Réalisés", value: `${data.events.length}`, sub: "Actions campus" },
     { label: "Clubs & Ateliers", value: `${data.clubsCount + data.ateliersCount}`, sub: `${data.clubsCount} clubs · ${data.ateliersCount} ateliers` },
-    { label: "Cotisations Assinie", value: `${cotisationsAssinie.toLocaleString()} F`, sub: "100% utilisé pour la sortie" },
+    { label: "Cotisations Assinie", value: "135.000 Fcfa", sub: "100% utilisé pour la sortie" },
     { label: "Cinéma (Poche Bureau)", value: "-15 000 F", sub: "Argent retiré / Fonds propres" },
   ];
 
@@ -547,7 +547,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     doc.setTextColor(100, 116, 139);
     doc.text(kpi.label.toUpperCase(), cardX + 3, y + 5);
 
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 30, 58);
     doc.text(kpi.value, cardX + 3, y + 11);
@@ -558,14 +558,15 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     doc.text(kpi.sub, cardX + 3, y + 15);
   });
 
-  y += 23;
+  // Aérer et faire descendre Section 1 pour ne pas être collée aux blocs du haut
+  y += 29;
 
   // Section 1 : Introduction & Bilan Moral
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 30, 58);
   doc.text("1. SYNTHÈSE EXÉCUTIVE & BILAN MORAL DU PRÉSIDENT", margin, y);
-  y += 5;
+  y += 6;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
@@ -623,7 +624,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
 
   const eventTableData = data.events.map((e) => {
     const statusLabel =
-      e.status === 'past' ? 'Réalisé' : e.status === 'upcoming' ? 'En cours / Prévu' : 'Annulé / Reporté';
+      e.status === 'past' ? 'Réalisé' : e.status === 'upcoming' ? 'En cours / Prévu' : 'Annulé';
     
     // Sanitize title and description
     const cleanedTitle = sanitize(e.title);
@@ -768,33 +769,33 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   y = (doc as any).lastAutoTable.finalY + 8;
 
   // Section 5 : Bilan Financier & Ressources (Conforme aux flux réels du mandat)
-  checkHeight(22);
+  checkHeight(35);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 30, 58);
   doc.text("5. BILAN FINANCIER & GESTION DES RESSOURCES DU MANDAT", margin, y);
-  y += 2;
+  y += 3;
 
   const financeTableData = [
     [
       'Cotisations Sortie Assinie',
       'Recensement des cotisations volontaires versées par les étudiants pour la sortie détente (non obligatoire)',
-      `+${cotisationsAssinie.toLocaleString()} FCFA`,
+      '+135.000 FCFA',
     ],
     [
       'Dépenses Logistique Sortie Assinie',
       'Utilisation directe et intégrale des cotisations pour financer le transport, le séjour et les activités',
-      `-${cotisationsAssinie.toLocaleString()} FCFA`,
+      '-135.000 FCFA',
     ],
     [
       'Projections Cinéma BDE (Fonds propres)',
       'Aucune cotisation perçue des étudiants — Argent retiré de la poche du Bureau pour organiser la projection',
-      '-15 000 FCFA',
+      '-15.000 FCFA',
     ],
     [
       'TOTAL DES COTISATIONS RECENSÉES',
       'Totalité des fonds collectés auprès des étudiants (exclusivement pour la sortie Assinie)',
-      `${cotisationsAssinie.toLocaleString()} FCFA`,
+      '135.000 FCFA',
     ],
     [
       'SOLDE DE TRÉSORERIE TRANSMIS',
@@ -817,11 +818,12 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     styles: {
       fontSize: 8,
       cellPadding: 2.5,
+      overflow: 'linebreak',
     },
     columnStyles: {
-      0: { cellWidth: 58, fontStyle: 'bold' },
-      1: { cellWidth: 78 },
-      2: { cellWidth: 46, halign: 'right', fontStyle: 'bold' },
+      0: { cellWidth: 50, fontStyle: 'bold' },
+      1: { cellWidth: 88 },
+      2: { cellWidth: 44, halign: 'right', fontStyle: 'bold' },
     },
     didParseCell: (hookData) => {
       if (hookData.section === 'body') {

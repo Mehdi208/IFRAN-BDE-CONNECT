@@ -480,7 +480,7 @@ const AdminMandateReport: React.FC = () => {
               <DollarSign size={16} className="text-emerald-500" />
             </div>
             <div className="text-xl font-extrabold text-bde-navy dark:text-white tabular-nums truncate">
-              {financialStats.totalCotisations.toLocaleString()} F
+              135.000 Fcfa
             </div>
             <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
               100% utilisé pour la sortie
@@ -844,7 +844,7 @@ const AdminMandateReport: React.FC = () => {
                         Recensement des cotisations volontaires versées par les étudiants pour la sortie détente (non obligatoire)
                       </td>
                       <td className="p-3.5 font-mono font-bold text-right tabular-nums whitespace-nowrap text-emerald-600 dark:text-emerald-400">
-                        +135 000 FCFA
+                        +135.000 FCFA
                       </td>
                     </tr>
 
@@ -856,7 +856,7 @@ const AdminMandateReport: React.FC = () => {
                         Utilisation directe et intégrale des cotisations pour financer le transport, le séjour et les activités
                       </td>
                       <td className="p-3.5 font-mono font-bold text-right tabular-nums whitespace-nowrap text-rose-600 dark:text-rose-400">
-                        -135 000 FCFA
+                        -135.000 FCFA
                       </td>
                     </tr>
 
@@ -868,7 +868,7 @@ const AdminMandateReport: React.FC = () => {
                         Aucune cotisation perçue des étudiants — Argent retiré de notre propre poche par le Bureau pour financer la projection
                       </td>
                       <td className="p-3.5 font-mono font-bold text-right tabular-nums whitespace-nowrap text-rose-600 dark:text-rose-400">
-                        -15 000 FCFA
+                        -15.000 FCFA
                       </td>
                     </tr>
 
@@ -880,7 +880,7 @@ const AdminMandateReport: React.FC = () => {
                         Totalité des fonds collectés auprès des étudiants (exclusivement pour la sortie Assinie)
                       </td>
                       <td className="p-3.5 font-mono text-right tabular-nums whitespace-nowrap text-blue-900 dark:text-blue-100">
-                        135 000 FCFA
+                        135.000 FCFA
                       </td>
                     </tr>
 
