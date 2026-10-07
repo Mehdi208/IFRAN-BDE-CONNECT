@@ -210,12 +210,13 @@ export interface MandateReportData {
   finances: {
     totalCollectedCotisations: number;
     contributorsCount: number;
-    totalCinemaRevenue: number;
-    totalCanteenRevenue: number;
+    totalCinemaRevenue?: number;
+    cinemaBureauContribution?: number;
     totalConsolidatedRevenue: number;
     estimatedExpenses?: number;
     treasuryBalance?: number;
   };
+  logoDataUrl?: string;
   prospectsCount: number;
   sentProspectsCount: number;
   canteenOrdersCount: number;

@@ -54,6 +54,7 @@ function App() {
         <Route path="/admin/contributions" element={<ProtectedRoute><AdminContributions /></ProtectedRoute>} />
         <Route path="/admin/clubs" element={<ProtectedRoute><AdminClubs /></ProtectedRoute>} />
         <Route path="/admin/gallery" element={<ProtectedRoute><AdminGallery /></ProtectedRoute>} />
+        <Route path="/admin/gallerie" element={<ProtectedRoute><AdminGallery /></ProtectedRoute>} />
         <Route path="/admin/ateliers" element={<ProtectedRoute><AdminAteliers /></ProtectedRoute>} />
         <Route path="/admin/canteen" element={<ProtectedRoute><AdminCanteen /></ProtectedRoute>} />
         <Route path="/admin/documents" element={<ProtectedRoute><AdminDocuments /></ProtectedRoute>} />

@@ -420,7 +420,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
   const contentWidth = pageWidth - margin * 2;
-  let y = 16;
+  let y = 14;
 
   // Helper for page break check
   const checkHeight = (neededHeight: number) => {
@@ -432,39 +432,69 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     return false;
   };
 
+  // Helper for cleaning corrupted text
+  const sanitize = (txt: string | undefined): string => {
+    if (!txt) return '';
+    return txt
+      .replace(/&½þ|&½|&þ|½þ/g, '& E-Sport')
+      .replace(/foot &½þ/gi, 'Foot & E-Sport')
+      .replace(/foot &½/gi, 'Foot & E-Sport')
+      .replace(/[^\x20-\x7E\xA0-\xFF\u0100-\u017F\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u20AC]/g, ' ')
+      .trim();
+  };
+
   // Header banner / Institutional Letterhead
   doc.setFillColor(15, 30, 58); // BDE Navy
-  doc.rect(margin, y, contentWidth, 24, 'F');
+  doc.rect(margin, y, contentWidth, 26, 'F');
 
   // Decorative accent line
   doc.setFillColor(231, 74, 103); // BDE Rose
-  doc.rect(margin, y + 23, contentWidth, 1.2, 'F');
+  doc.rect(margin, y + 25, contentWidth, 1.2, 'F');
 
+  // School Logo rendering
+  if (data.logoDataUrl) {
+    try {
+      doc.addImage(data.logoDataUrl, 'PNG', margin + 4, y + 3, 20, 20);
+    } catch (e) {
+      // Fallback seal
+    }
+  } else {
+    // Vector crest seal fallback
+    doc.setFillColor(255, 255, 255);
+    doc.circle(margin + 13, y + 13, 9, 'F');
+    doc.setFillColor(15, 30, 58);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('IFRAN', margin + 13, y + 14, { align: 'center' });
+  }
+
+  const textStartX = margin + 27;
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text("INSTITUT AFRICAIN DE FORMATION ET DE TECHNOLOGIE (IFRAN)", margin + 6, y + 8);
+  doc.setFontSize(11);
+  doc.text("INSTITUT AFRICAIN DE FORMATION ET DE TECHNOLOGIE (IFRAN)", textStartX, y + 8);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text("BUREAU DES ÉTUDIANTS (BDE) • GOUVERNANCE & ADMINISTRATION", margin + 6, y + 14);
-  doc.setFontSize(8);
-  doc.text(`Année Académique : ${data.academicYear || '2024 - 2025 / 2025 - 2026'}`, margin + 6, y + 19);
+  doc.setFontSize(8.5);
+  doc.text("BUREAU DES ÉTUDIANTS (BDE) • GOUVERNANCE & ADMINISTRATION", textStartX, y + 14);
+  doc.setFontSize(7.5);
+  doc.text(`Année Académique : ${data.academicYear || '2024 - 2025 / 2025 - 2026'}`, textStartX, y + 20);
 
-  y += 30;
+  // AÉRATION SIGNIFICATIVE ENTRE LE BANDEAU DU HAUT ET LE TITRE DU DOCUMENT
+  y = 52;
 
   // Document Title
   doc.setTextColor(15, 30, 58);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.text("RAPPORT DE BILAN DE MANDAT PRÉSIDENTIEL", margin, y);
-  y += 6;
+  y += 7;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(100, 116, 139);
   doc.text("Bilan Moral, Opérationnel, Pédagogique et Financier du Mandat", margin, y);
-  y += 8;
+  y += 9;
 
   // Metadata Box (Recipient, Submission, President)
   doc.setFillColor(248, 250, 252);
@@ -497,11 +527,14 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
 
   // Key KPI Cards (4 cards in a row)
   const cardWidth = (contentWidth - 9) / 4;
+  const cinemaFondsPropres = data.finances.cinemaBureauContribution || 15000;
+  const totalMobilise = data.finances.totalCollectedCotisations + cinemaFondsPropres;
+
   const kpis = [
     { label: "Événements Réalisés", value: `${data.events.length}`, sub: "Mobilisations globales" },
     { label: "Clubs & Ateliers", value: `${data.clubsCount + data.ateliersCount}`, sub: `${data.clubsCount} clubs · ${data.ateliersCount} ateliers` },
-    { label: "Cotisations Collectées", value: `${data.finances.totalCollectedCotisations.toLocaleString()} F`, sub: `${data.finances.contributorsCount} cotisants actifs` },
-    { label: "Recettes Consolidées", value: `${data.finances.totalConsolidatedRevenue.toLocaleString()} F`, sub: "Cotisations + Ciné + Cantine" },
+    { label: "Cotisations Assinie", value: `${data.finances.totalCollectedCotisations.toLocaleString()} F`, sub: "Participation volontaire" },
+    { label: "Total Fonds Mobilisés", value: `${totalMobilise.toLocaleString()} F`, sub: "Assinie + Apport bureau" },
   ];
 
   kpis.forEach((kpi, idx) => {
@@ -515,7 +548,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     doc.setTextColor(100, 116, 139);
     doc.text(kpi.label.toUpperCase(), cardX + 3, y + 5);
 
-    doc.setFontSize(10.5);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 30, 58);
     doc.text(kpi.value, cardX + 3, y + 11);
@@ -592,18 +625,23 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   const eventTableData = data.events.map((e) => {
     const statusLabel =
       e.status === 'past' ? 'Réalisé' : e.status === 'upcoming' ? 'En cours / Prévu' : 'Annulé / Reporté';
+    
+    // Sanitize title and description
+    const cleanedTitle = sanitize(e.title);
+    const cleanedDesc = sanitize(e.description) || 'Activité officielle BDE';
+
     return [
       e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-',
-      e.title,
-      e.location || 'Campus IFRAN',
+      cleanedTitle,
+      sanitize(e.location) || 'Campus IFRAN',
       statusLabel,
-      e.description ? e.description.substring(0, 95) + (e.description.length > 95 ? '...' : '') : 'Activité officielle BDE',
+      cleanedDesc.length > 110 ? cleanedDesc.substring(0, 110) + '...' : cleanedDesc,
     ];
   });
 
   autoTable(doc, {
     startY: y + 2,
-    head: [['Date', 'Activité / Événement', 'Lieu', 'Statut', 'Portée & Objectif']],
+    head: [['Date', 'Activité / Événement', 'Lieu', 'Statut', 'Description']],
     body: eventTableData,
     theme: 'grid',
     headStyles: {
@@ -615,32 +653,29 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     styles: {
       fontSize: 7.5,
       cellPadding: 2.5,
+      overflow: 'linebreak',
     },
     columnStyles: {
-      0: { cellWidth: 22 },
-      1: { cellWidth: 38, fontStyle: 'bold' },
-      2: { cellWidth: 28 },
-      3: { cellWidth: 28, fontStyle: 'bold', halign: 'center' },
-      4: { cellWidth: 'auto' },
+      0: { cellWidth: 20 },
+      1: { cellWidth: 44, fontStyle: 'bold' },
+      2: { cellWidth: 26 },
+      3: { cellWidth: 25, fontStyle: 'bold', halign: 'center' },
+      4: { cellWidth: 67 },
     },
-    // Addition of colors within the rows to clearly identify statuses (as explicitly requested)
     didParseCell: (hookData) => {
       if (hookData.section === 'body') {
         const rawStatus = data.events[hookData.row.index]?.status;
         if (rawStatus === 'past') {
-          // Soft emerald green line
           hookData.cell.styles.fillColor = [236, 253, 245];
           if (hookData.column.index === 3) {
             hookData.cell.styles.textColor = [6, 95, 70];
           }
         } else if (rawStatus === 'upcoming') {
-          // Soft amber / warm line
           hookData.cell.styles.fillColor = [254, 247, 224];
           if (hookData.column.index === 3) {
             hookData.cell.styles.textColor = [161, 98, 7];
           }
         } else if (rawStatus === 'cancelled') {
-          // Soft rose / red line
           hookData.cell.styles.fillColor = [254, 242, 242];
           if (hookData.column.index === 3) {
             hookData.cell.styles.textColor = [153, 27, 27];
@@ -660,11 +695,32 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   doc.text("4. STRUCTURATION DES CLUBS PERMANENTS & ATELIERS AFTERNOON", margin, y);
   y += 2;
 
+  // Helper function to map precise real club missions
+  const getClubMission = (clubName: string, defaultAct: string) => {
+    const nameLower = clubName.toLowerCase();
+    if (nameLower.includes('kurotsuki') || nameLower.includes('model')) {
+      return "Organisation de défilés de mode, séances photos et réalisations de vidéos créatives.";
+    }
+    if (nameLower.includes('studio') || nameLower.includes('music') || nameLower.includes('musique')) {
+      return "Projet d'écoute musicale et de chant (activité non concrétisée durant le mandat).";
+    }
+    if (nameLower.includes('fitness') || nameLower.includes('sport')) {
+      return "Initiative sportive et séances de fitness (activité non concrétisée durant le mandat).";
+    }
+    if (nameLower.includes('créati') || nameLower.includes('creati') || nameLower.includes('art')) {
+      return "Ateliers de dessin, créations artistiques et customisation d'objets durant les séances.";
+    }
+    if (nameLower.includes('finance') || nameLower.includes('investiss') || nameLower.includes('crypto')) {
+      return "Échanges et discussions autour de la gestion financière, de l'investissement et des cryptomonnaies.";
+    }
+    return defaultAct || 'Ateliers, projets et entraide';
+  };
+
   const clubTableData = data.clubsList.map((c) => [
     'Club Permanent',
     c.name,
     c.leader || 'Coordination BDE',
-    c.activities || 'Ateliers, projets et entraide',
+    getClubMission(c.name, c.activities),
   ]);
 
   data.ateliersList.forEach((a) => {
@@ -672,7 +728,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
       'Atelier Afternoon',
       a.name,
       `Salle : ${a.room || 'IFRAN'}`,
-      'Perfectionnement technique & pratique',
+      'Perfectionnement technique & pratique hebdomadaire',
     ]);
   });
 
@@ -690,9 +746,10 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     styles: {
       fontSize: 7.5,
       cellPadding: 2,
+      overflow: 'linebreak',
     },
     columnStyles: {
-      0: { cellWidth: 32, fontStyle: 'bold' },
+      0: { cellWidth: 30, fontStyle: 'bold' },
       1: { cellWidth: 42, fontStyle: 'bold' },
       2: { cellWidth: 38 },
       3: { cellWidth: 'auto' },
@@ -711,7 +768,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
 
   y = (doc as any).lastAutoTable.finalY + 8;
 
-  // Section 5 : Bilan Financier Consolidé
+  // Section 5 : Bilan Financier Consolidé (Sans cantine ni fausses dépenses opérationnelles)
   checkHeight(22);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
@@ -720,17 +777,31 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   y += 2;
 
   const financeTableData = [
-    ['Cotisations Étudiantes', `${data.finances.contributorsCount} étudiants cotisants`, `${data.finances.totalCollectedCotisations.toLocaleString()} FCFA`],
-    ['Billetterie Projections Cinéma BDE', 'Ventes tickets & confiseries', `${data.finances.totalCinemaRevenue.toLocaleString()} FCFA`],
-    ['Service Cantine & Restauration', `${data.canteenOrdersCount} commandes traitées`, `${data.finances.totalCanteenRevenue.toLocaleString()} FCFA`],
-    ['TOTAL DES RECETTES CONSOLIDÉES', 'Ressources mobilisées par le BDE', `${data.finances.totalConsolidatedRevenue.toLocaleString()} FCFA`],
-    ['Dépenses Engagées & Investissements', 'Logistique, événementiel, matériel clubs', `${(data.finances.estimatedExpenses ?? Math.round(data.finances.totalConsolidatedRevenue * 0.78)).toLocaleString()} FCFA`],
-    ['SOLDE DE TRÉSORERIE TRANSMIS', 'Fonds disponibles pour la relève', `${(data.finances.treasuryBalance ?? Math.round(data.finances.totalConsolidatedRevenue * 0.22)).toLocaleString()} FCFA`],
+    [
+      'Cotisations Sortie Assinie',
+      'Participation volontaire des étudiants pour la sortie détente (non obligatoire)',
+      `${data.finances.totalCollectedCotisations.toLocaleString()} FCFA`,
+    ],
+    [
+      'Projections Cinéma BDE (Fonds propres)',
+      'Apport direct des membres du Bureau (frais pris sur notre poche, sans cotisation)',
+      `${cinemaFondsPropres.toLocaleString()} FCFA`,
+    ],
+    [
+      'TOTAL DES RESSOURCES MOBILISÉES',
+      'Fonds totaux gérés et injectés par le BDE dans la vie étudiante',
+      `${totalMobilise.toLocaleString()} FCFA`,
+    ],
+    [
+      'SOLDE DE TRÉSORERIE TRANSMIS',
+      'Fonds disponibles pour la passation de service au futur Bureau',
+      `${(data.finances.treasuryBalance ?? totalMobilise).toLocaleString()} FCFA`,
+    ],
   ];
 
   autoTable(doc, {
     startY: y + 2,
-    head: [['Poste Budgétaire', 'Détail / Volume d\'activité', 'Montant (FCFA)']],
+    head: [['Poste Budgétaire', 'Détail / Précision de gestion', 'Montant (FCFA)']],
     body: financeTableData,
     theme: 'grid',
     headStyles: {
@@ -744,18 +815,18 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
       cellPadding: 2.5,
     },
     columnStyles: {
-      0: { cellWidth: 70, fontStyle: 'bold' },
-      1: { cellWidth: 70 },
-      2: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold' },
+      0: { cellWidth: 62, fontStyle: 'bold' },
+      1: { cellWidth: 72 },
+      2: { cellWidth: 48, halign: 'right', fontStyle: 'bold' },
     },
     didParseCell: (hookData) => {
       if (hookData.section === 'body') {
-        if (hookData.row.index === 3) {
-          // Total recettes
+        if (hookData.row.index === 2) {
+          // Total mobilise
           hookData.cell.styles.fillColor = [224, 242, 254];
           hookData.cell.styles.textColor = [3, 105, 161];
-        } else if (hookData.row.index === 5) {
-          // Solde trésorerie
+        } else if (hookData.row.index === 3) {
+          // Solde tresorerie
           hookData.cell.styles.fillColor = [236, 253, 245];
           hookData.cell.styles.textColor = [6, 95, 70];
         }
@@ -765,12 +836,16 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
 
   y = (doc as any).lastAutoTable.finalY + 8;
 
-  // Section 6 : Digitalisation & Prospection
-  checkHeight(20);
+  // Section 6 : Digitalisation & Communication (FORCER LE SAUT DE PAGE SI TROP BAS POUR ÉVITER TOUT DÉBORDEMENT)
+  if (y + 50 > pageHeight - 20) {
+    doc.addPage();
+    y = 20;
+  }
+
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 30, 58);
-  doc.text("6. INNOVATION DIGITALE & COMMUNICATION MULTI-CANAL", margin, y);
+  doc.text("6. INNOVATION DIGITALE & COMMUNICATION DU BDE", margin, y);
   y += 5;
 
   doc.setFont('helvetica', 'normal');
@@ -778,19 +853,25 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   doc.setTextColor(51, 65, 85);
   const digitalProse = [
     `• Plateforme Web BDE : Centralisation en ligne de l'agenda, des inscriptions aux clubs, du tutorat et des documents officiels.`,
-    `• Service Cantine Connectée : Déploiement d'une solution de précommande et de gestion des menus pour fluidifier la restauration des étudiants.`,
+    `• Service Cantine Connectée : Déploiement d'une solution de précommande et de gestion des menus pour fluidifier la restauration des étudiants (recettes revenant à la prestataire de restauration).`,
     `• Communication & Réseaux Étudiants : Diffusion continue de l'actualité des promotions, écoute des besoins étudiants et coordination proactive avec l'Administration.`,
   ];
   digitalProse.forEach((line) => {
-    checkHeight(5);
-    doc.text(line, margin, y);
-    y += 4.5;
+    const splitLines = doc.splitTextToSize(line, contentWidth);
+    splitLines.forEach((sl: string) => {
+      checkHeight(5);
+      doc.text(sl, margin, y);
+      y += 4.5;
+    });
   });
 
-  y += 4;
+  y += 5;
 
-  // Section 7 : Difficultés & Recommandations
-  checkHeight(22);
+  // Section 7 : Difficultés & Recommandations (AVEC PAGE BREAK DE SÉCURITÉ)
+  if (y + 40 > pageHeight - 20) {
+    doc.addPage();
+    y = 20;
+  }
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 30, 58);
@@ -814,10 +895,13 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     y += 4;
   });
 
-  y += 4;
+  y += 5;
 
   // Section 8 : Conclusion
-  checkHeight(18);
+  if (y + 35 > pageHeight - 20) {
+    doc.addPage();
+    y = 20;
+  }
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 30, 58);
@@ -838,10 +922,13 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     y += 4.5;
   });
 
-  y += 8;
+  y += 6;
 
-  // Section 9 : Signatures & Visa Officiels
-  checkHeight(32);
+  // Section 9 : Signatures & Visa Officiels (TOUJOURS GROUPÉES SANS DÉBORDEMENT)
+  if (y + 50 > pageHeight - 15) {
+    doc.addPage();
+    y = 20;
+  }
   doc.setDrawColor(203, 213, 225);
   doc.line(margin, y, margin + contentWidth, y);
   y += 5;
@@ -882,7 +969,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   doc.text("Accusé de réception & Visa", margin + colW * 2, y + 8);
   doc.text("Cachet & Signature :", margin + colW * 2, y + 14);
 
-  // Page Numbers & Footers on all pages
+  // Page Numbers & Running Headers
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
@@ -890,12 +977,12 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
     doc.setTextColor(148, 163, 184);
     doc.setFont('helvetica', 'normal');
     // Top subtle running header
-    doc.text("IFRAN • Bureau Des Étudiants (BDE) — Rapport Officiel de Bilan de Mandat", margin, 10);
+    doc.text("IFRAN • Bureau Des Étudiants (BDE) — Rapport Officiel de Bilan de Mandat", margin, 9);
     // Bottom running footer
     doc.text(
       `Document officiel déposé à l'Administration — Page ${i} sur ${totalPages}`,
       pageWidth / 2,
-      pageHeight - 8,
+      pageHeight - 7,
       { align: 'center' }
     );
   }
