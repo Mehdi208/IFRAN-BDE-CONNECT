@@ -247,9 +247,9 @@ const AdminMandateReport: React.FC = () => {
       title: "5. Rigueur de Gestion & Transparence Financière",
       icon: DollarSign,
       achievements: [
-        `${financialStats.totalCotisations.toLocaleString()} FCFA de cotisations recensées pour la sortie Assinie et intégralement affectées au séjour des étudiants.`,
-        `15 000 FCFA déboursés directement sur les fonds personnels du Bureau pour l'organisation des séances cinéma.`,
-        `Solde de trésorerie net clôturé à 0 FCFA (aucune dette, aucun reliquat non affecté).`
+        "135.000 FCFA de cotisations recensées pour la sortie Assinie et intégralement affectées au séjour des étudiants.",
+        "15.000 FCFA déboursés directement sur les fonds personnels du Bureau pour l'organisation des séances cinéma.",
+        "Solde de trésorerie net clôturé à 0 FCFA (aucune dette, aucun reliquat non affecté)."
       ]
     }
   ], [clubs, ateliers, foodOrders, financialStats]);

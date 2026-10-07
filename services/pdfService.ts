@@ -581,7 +581,7 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   y += 5;
 
   // Section 2 : Grands Piliers d'Intervention
-  checkHeight(18);
+  checkHeight(20);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 30, 58);
@@ -590,25 +590,37 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
 
   if (data.keyPillars && data.keyPillars.length > 0) {
     data.keyPillars.forEach((pillar) => {
-      checkHeight(14);
+      // Nettoyage et formatage du titre du pilier
+      const cleanTitle = sanitize(pillar.title);
+      
+      // Calcul de l'encombrement prévisionnel pour éviter d'orpheliner le titre en bas de page
+      checkHeight(18);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(231, 74, 103);
-      doc.text(`• ${pillar.title}`, margin, y);
-      y += 4;
+      doc.text(`• ${cleanTitle}`, margin, y);
+      y += 4.5;
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(51, 65, 85);
+
       pillar.achievements.forEach((ach) => {
-        checkHeight(5);
-        const achLines = doc.splitTextToSize(`   - ${ach}`, contentWidth - 4);
+        // Remplacement des séparateurs / et espaces dans les montants par des points
+        const cleanAch = sanitize(ach)
+          .replace(/135\s*[\/\\]\s*000/g, '135.000')
+          .replace(/135\s+000/g, '135.000')
+          .replace(/15\s*[\/\\]\s*000/g, '15.000')
+          .replace(/15\s+000/g, '15.000');
+
+        const achLines = doc.splitTextToSize(`   - ${cleanAch}`, contentWidth - 4);
         achLines.forEach((al: string) => {
+          checkHeight(6);
           doc.text(al, margin, y);
           y += 4;
         });
       });
-      y += 2;
+      y += 2.5;
     });
   }
 
