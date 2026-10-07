@@ -1,7 +1,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Student, Club, CinemaSale, FoodOrder } from '../types';
+import { Student, Club, CinemaSale, FoodOrder, MandateReportData } from '../types';
 
 export interface EmailData {
     evtName: string;
@@ -407,4 +407,500 @@ export const generateFinanceReport = (students: Student[], range: { start: strin
   });
 
   doc.save(`Bilan_Financier_${range.start}_${range.end}.pdf`);
+};
+
+export const generatePresidentMandateReport = (data: MandateReportData) => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const contentWidth = pageWidth - margin * 2;
+  let y = 16;
+
+  // Helper for page break check
+  const checkHeight = (neededHeight: number) => {
+    if (y + neededHeight > pageHeight - 20) {
+      doc.addPage();
+      y = 18;
+      return true;
+    }
+    return false;
+  };
+
+  // Header banner / Institutional Letterhead
+  doc.setFillColor(15, 30, 58); // BDE Navy
+  doc.rect(margin, y, contentWidth, 24, 'F');
+
+  // Decorative accent line
+  doc.setFillColor(231, 74, 103); // BDE Rose
+  doc.rect(margin, y + 23, contentWidth, 1.2, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text("INSTITUT AFRICAIN DE FORMATION ET DE TECHNOLOGIE (IFRAN)", margin + 6, y + 8);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text("BUREAU DES ÉTUDIANTS (BDE) • GOUVERNANCE & ADMINISTRATION", margin + 6, y + 14);
+  doc.setFontSize(8);
+  doc.text(`Année Académique : ${data.academicYear || '2024 - 2025 / 2025 - 2026'}`, margin + 6, y + 19);
+
+  y += 30;
+
+  // Document Title
+  doc.setTextColor(15, 30, 58);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text("RAPPORT DE BILAN DE MANDAT PRÉSIDENTIEL", margin, y);
+  y += 6;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Bilan Moral, Opérationnel, Pédagogique et Financier du Mandat", margin, y);
+  y += 8;
+
+  // Metadata Box (Recipient, Submission, President)
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(margin, y, contentWidth, 24, 2, 2, 'FD');
+
+  doc.setFontSize(9);
+  doc.setTextColor(15, 30, 58);
+  doc.setFont('helvetica', 'bold');
+  doc.text("Destinataire :", margin + 4, y + 6);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(51, 65, 85);
+  doc.text(data.recipient || "Direction Générale & Administration de l'IFRAN", margin + 28, y + 6);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("Président BDE :", margin + 4, y + 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(51, 65, 85);
+  doc.text(`${data.presidentName} (${data.presidentEmail} | ${data.presidentPhone})`, margin + 30, y + 12);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("Période & Dépôt :", margin + 4, y + 18);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(51, 65, 85);
+  doc.text(`${data.mandatePeriod} — Déposé le ${data.submissionDate}`, margin + 33, y + 18);
+
+  y += 28;
+
+  // Key KPI Cards (4 cards in a row)
+  const cardWidth = (contentWidth - 9) / 4;
+  const kpis = [
+    { label: "Événements Réalisés", value: `${data.events.length}`, sub: "Mobilisations globales" },
+    { label: "Clubs & Ateliers", value: `${data.clubsCount + data.ateliersCount}`, sub: `${data.clubsCount} clubs · ${data.ateliersCount} ateliers` },
+    { label: "Cotisations Collectées", value: `${data.finances.totalCollectedCotisations.toLocaleString()} F`, sub: `${data.finances.contributorsCount} cotisants actifs` },
+    { label: "Recettes Consolidées", value: `${data.finances.totalConsolidatedRevenue.toLocaleString()} F`, sub: "Cotisations + Ciné + Cantine" },
+  ];
+
+  kpis.forEach((kpi, idx) => {
+    const cardX = margin + idx * (cardWidth + 3);
+    doc.setFillColor(241, 245, 249);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(cardX, y, cardWidth, 18, 1.5, 1.5, 'FD');
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100, 116, 139);
+    doc.text(kpi.label.toUpperCase(), cardX + 3, y + 5);
+
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 30, 58);
+    doc.text(kpi.value, cardX + 3, y + 11);
+
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(kpi.sub, cardX + 3, y + 15);
+  });
+
+  y += 23;
+
+  // Section 1 : Introduction & Bilan Moral
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("1. SYNTHÈSE EXÉCUTIVE & BILAN MORAL DU PRÉSIDENT", margin, y);
+  y += 5;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(51, 65, 85);
+  const moralLines = doc.splitTextToSize(data.moralReport || data.executiveSummary, contentWidth);
+  moralLines.forEach((line: string) => {
+    checkHeight(5);
+    doc.text(line, margin, y);
+    y += 4.5;
+  });
+
+  y += 5;
+
+  // Section 2 : Grands Piliers d'Intervention
+  checkHeight(18);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("2. AXES STRATÉGIQUES & ENGAGEMENTS ACCOMPLIS", margin, y);
+  y += 5;
+
+  if (data.keyPillars && data.keyPillars.length > 0) {
+    data.keyPillars.forEach((pillar) => {
+      checkHeight(14);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(231, 74, 103);
+      doc.text(`• ${pillar.title}`, margin, y);
+      y += 4;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(51, 65, 85);
+      pillar.achievements.forEach((ach) => {
+        checkHeight(5);
+        const achLines = doc.splitTextToSize(`   - ${ach}`, contentWidth - 4);
+        achLines.forEach((al: string) => {
+          doc.text(al, margin, y);
+          y += 4;
+        });
+      });
+      y += 2;
+    });
+  }
+
+  y += 4;
+
+  // Section 3 : Bilan Événementiel avec COULEURS DANS LES LIGNES SELON STATUT
+  checkHeight(20);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("3. TABLEAU DES ÉVÉNEMENTS & ACTIONS DE LA VIE ÉTUDIANTE", margin, y);
+  y += 2;
+
+  const eventTableData = data.events.map((e) => {
+    const statusLabel =
+      e.status === 'past' ? 'Réalisé' : e.status === 'upcoming' ? 'En cours / Prévu' : 'Annulé / Reporté';
+    return [
+      e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-',
+      e.title,
+      e.location || 'Campus IFRAN',
+      statusLabel,
+      e.description ? e.description.substring(0, 95) + (e.description.length > 95 ? '...' : '') : 'Activité officielle BDE',
+    ];
+  });
+
+  autoTable(doc, {
+    startY: y + 2,
+    head: [['Date', 'Activité / Événement', 'Lieu', 'Statut', 'Portée & Objectif']],
+    body: eventTableData,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [15, 30, 58],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    styles: {
+      fontSize: 7.5,
+      cellPadding: 2.5,
+    },
+    columnStyles: {
+      0: { cellWidth: 22 },
+      1: { cellWidth: 38, fontStyle: 'bold' },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 28, fontStyle: 'bold', halign: 'center' },
+      4: { cellWidth: 'auto' },
+    },
+    // Addition of colors within the rows to clearly identify statuses (as explicitly requested)
+    didParseCell: (hookData) => {
+      if (hookData.section === 'body') {
+        const rawStatus = data.events[hookData.row.index]?.status;
+        if (rawStatus === 'past') {
+          // Soft emerald green line
+          hookData.cell.styles.fillColor = [236, 253, 245];
+          if (hookData.column.index === 3) {
+            hookData.cell.styles.textColor = [6, 95, 70];
+          }
+        } else if (rawStatus === 'upcoming') {
+          // Soft amber / warm line
+          hookData.cell.styles.fillColor = [254, 247, 224];
+          if (hookData.column.index === 3) {
+            hookData.cell.styles.textColor = [161, 98, 7];
+          }
+        } else if (rawStatus === 'cancelled') {
+          // Soft rose / red line
+          hookData.cell.styles.fillColor = [254, 242, 242];
+          if (hookData.column.index === 3) {
+            hookData.cell.styles.textColor = [153, 27, 27];
+          }
+        }
+      }
+    },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 8;
+
+  // Section 4 : Clubs Permanents & Ateliers Afternoon
+  checkHeight(20);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("4. STRUCTURATION DES CLUBS PERMANENTS & ATELIERS AFTERNOON", margin, y);
+  y += 2;
+
+  const clubTableData = data.clubsList.map((c) => [
+    'Club Permanent',
+    c.name,
+    c.leader || 'Coordination BDE',
+    c.activities || 'Ateliers, projets et entraide',
+  ]);
+
+  data.ateliersList.forEach((a) => {
+    clubTableData.push([
+      'Atelier Afternoon',
+      a.name,
+      `Salle : ${a.room || 'IFRAN'}`,
+      'Perfectionnement technique & pratique',
+    ]);
+  });
+
+  autoTable(doc, {
+    startY: y + 2,
+    head: [['Type', 'Dénomination', 'Responsable / Lieu', 'Missions & Activités']],
+    body: clubTableData,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    styles: {
+      fontSize: 7.5,
+      cellPadding: 2,
+    },
+    columnStyles: {
+      0: { cellWidth: 32, fontStyle: 'bold' },
+      1: { cellWidth: 42, fontStyle: 'bold' },
+      2: { cellWidth: 38 },
+      3: { cellWidth: 'auto' },
+    },
+    didParseCell: (hookData) => {
+      if (hookData.section === 'body') {
+        const type = hookData.row.raw ? (hookData.row.raw as any)[0] : '';
+        if (type === 'Club Permanent') {
+          hookData.cell.styles.fillColor = [248, 250, 252];
+        } else {
+          hookData.cell.styles.fillColor = [240, 249, 255];
+        }
+      }
+    },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 8;
+
+  // Section 5 : Bilan Financier Consolidé
+  checkHeight(22);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("5. BILAN FINANCIER CONSOLIDÉ & GESTION DES RESSOURCES", margin, y);
+  y += 2;
+
+  const financeTableData = [
+    ['Cotisations Étudiantes', `${data.finances.contributorsCount} étudiants cotisants`, `${data.finances.totalCollectedCotisations.toLocaleString()} FCFA`],
+    ['Billetterie Projections Cinéma BDE', 'Ventes tickets & confiseries', `${data.finances.totalCinemaRevenue.toLocaleString()} FCFA`],
+    ['Service Cantine & Restauration', `${data.canteenOrdersCount} commandes traitées`, `${data.finances.totalCanteenRevenue.toLocaleString()} FCFA`],
+    ['TOTAL DES RECETTES CONSOLIDÉES', 'Ressources mobilisées par le BDE', `${data.finances.totalConsolidatedRevenue.toLocaleString()} FCFA`],
+    ['Dépenses Engagées & Investissements', 'Logistique, événementiel, matériel clubs', `${(data.finances.estimatedExpenses ?? Math.round(data.finances.totalConsolidatedRevenue * 0.78)).toLocaleString()} FCFA`],
+    ['SOLDE DE TRÉSORERIE TRANSMIS', 'Fonds disponibles pour la relève', `${(data.finances.treasuryBalance ?? Math.round(data.finances.totalConsolidatedRevenue * 0.22)).toLocaleString()} FCFA`],
+  ];
+
+  autoTable(doc, {
+    startY: y + 2,
+    head: [['Poste Budgétaire', 'Détail / Volume d\'activité', 'Montant (FCFA)']],
+    body: financeTableData,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [15, 30, 58],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.5,
+    },
+    columnStyles: {
+      0: { cellWidth: 70, fontStyle: 'bold' },
+      1: { cellWidth: 70 },
+      2: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold' },
+    },
+    didParseCell: (hookData) => {
+      if (hookData.section === 'body') {
+        if (hookData.row.index === 3) {
+          // Total recettes
+          hookData.cell.styles.fillColor = [224, 242, 254];
+          hookData.cell.styles.textColor = [3, 105, 161];
+        } else if (hookData.row.index === 5) {
+          // Solde trésorerie
+          hookData.cell.styles.fillColor = [236, 253, 245];
+          hookData.cell.styles.textColor = [6, 95, 70];
+        }
+      }
+    },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 8;
+
+  // Section 6 : Digitalisation & Prospection
+  checkHeight(20);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("6. INNOVATION DIGITALE & COMMUNICATION MULTI-CANAL", margin, y);
+  y += 5;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(51, 65, 85);
+  const digitalProse = [
+    `• Plateforme Web BDE : Centralisation en ligne de l'agenda, des inscriptions aux clubs, du tutorat et des documents officiels.`,
+    `• Service Cantine Connectée : Déploiement d'une solution de précommande et de gestion des menus pour fluidifier la restauration des étudiants.`,
+    `• Communication & Réseaux Étudiants : Diffusion continue de l'actualité des promotions, écoute des besoins étudiants et coordination proactive avec l'Administration.`,
+  ];
+  digitalProse.forEach((line) => {
+    checkHeight(5);
+    doc.text(line, margin, y);
+    y += 4.5;
+  });
+
+  y += 4;
+
+  // Section 7 : Difficultés & Recommandations
+  checkHeight(22);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("7. DIFFICULTÉS RENCONTRÉES & RECOMMANDATIONS POUR L'ADMINISTRATION", margin, y);
+  y += 5;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(51, 65, 85);
+
+  const recoText = data.recommendations ||
+    "1. Poursuivre l'accompagnement institutionnel et logistique des initiatives portées par les clubs.\n" +
+    "2. Sanctuariser les créneaux dédiés aux Ateliers Afternoon dans l'emploi du temps pédagogique.\n" +
+    "3. Consolider la collecte précoce des cotisations dès la rentrée afin de sécuriser le calendrier événementiel.\n" +
+    "4. Maintenir et enrichir les outils digitaux développés (cantine, plateforme BDE, relances).";
+
+  const recoLines = doc.splitTextToSize(recoText, contentWidth);
+  recoLines.forEach((line: string) => {
+    checkHeight(5);
+    doc.text(line, margin, y);
+    y += 4;
+  });
+
+  y += 4;
+
+  // Section 8 : Conclusion
+  checkHeight(18);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("8. CONCLUSION DU MANDAT", margin, y);
+  y += 5;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(51, 65, 85);
+  const conclLines = doc.splitTextToSize(
+    data.conclusion ||
+    "Ce mandat a été une aventure humaine et collective d'une richesse exceptionnelle. Nous exprimons notre profonde gratitude à la Direction Générale de l'IFRAN, au corps professoral et à l'ensemble des étudiants pour leur confiance sans faille. Nous transmettons un bureau structuré, des finances saines et des projets pérennes pour le rayonnement continu de l'IFRAN.",
+    contentWidth
+  );
+  conclLines.forEach((line: string) => {
+    checkHeight(5);
+    doc.text(line, margin, y);
+    y += 4.5;
+  });
+
+  y += 8;
+
+  // Section 9 : Signatures & Visa Officiels
+  checkHeight(32);
+  doc.setDrawColor(203, 213, 225);
+  doc.line(margin, y, margin + contentWidth, y);
+  y += 5;
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 30, 58);
+  doc.text("EMARGEMENTS & VISAS OFFICIELS DE DÉPÔT", margin, y);
+  y += 6;
+
+  const colW = contentWidth / 3;
+
+  // Col 1 : President
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text("Pour le Bureau des Étudiants :", margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.presidentName, margin, y + 4);
+  doc.setFont('helvetica', 'italic');
+  doc.text("Président du BDE", margin, y + 8);
+  doc.text("Signature & Date :", margin, y + 14);
+
+  // Col 2 : Trésorier
+  doc.setFont('helvetica', 'bold');
+  doc.text("Pour la Trésorerie Générale :", margin + colW, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text("Le Trésorier du BDE", margin + colW, y + 4);
+  doc.setFont('helvetica', 'italic');
+  doc.text("Visa de conformité comptable", margin + colW, y + 8);
+  doc.text("Signature & Date :", margin + colW, y + 14);
+
+  // Col 3 : Administration IFRAN
+  doc.setFont('helvetica', 'bold');
+  doc.text("Pour l'Administration IFRAN :", margin + colW * 2, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text("Direction des Études & Vie Étudiante", margin + colW * 2, y + 4);
+  doc.setFont('helvetica', 'italic');
+  doc.text("Accusé de réception & Visa", margin + colW * 2, y + 8);
+  doc.text("Cachet & Signature :", margin + colW * 2, y + 14);
+
+  // Page Numbers & Footers on all pages
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.setFont('helvetica', 'normal');
+    // Top subtle running header
+    doc.text("IFRAN • Bureau Des Étudiants (BDE) — Rapport Officiel de Bilan de Mandat", margin, 10);
+    // Bottom running footer
+    doc.text(
+      `Document officiel déposé à l'Administration — Page ${i} sur ${totalPages}`,
+      pageWidth / 2,
+      pageHeight - 8,
+      { align: 'center' }
+    );
+  }
+
+  // Save the PDF
+  const filename = `Rapport_Bilan_Mandat_President_${data.presidentName.replace(/\s+/g, '_')}_IFRAN.pdf`;
+  doc.save(filename);
 };

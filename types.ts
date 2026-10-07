@@ -182,3 +182,45 @@ export interface CampaignTemplate {
   body: string;
 }
 
+export interface MandateReportData {
+  presidentName: string;
+  presidentPhone: string;
+  presidentEmail: string;
+  mandatePeriod: string;
+  academicYear: string;
+  submissionDate: string;
+  recipient: string;
+  executiveSummary: string;
+  moralReport: string;
+  keyPillars: {
+    title: string;
+    achievements: string[];
+  }[];
+  events: {
+    title: string;
+    date: string;
+    location: string;
+    status: 'upcoming' | 'past' | 'cancelled';
+    description?: string;
+  }[];
+  clubsCount: number;
+  clubsList: { name: string; leader: string; activities: string }[];
+  ateliersCount: number;
+  ateliersList: { name: string; room: string }[];
+  finances: {
+    totalCollectedCotisations: number;
+    contributorsCount: number;
+    totalCinemaRevenue: number;
+    totalCanteenRevenue: number;
+    totalConsolidatedRevenue: number;
+    estimatedExpenses?: number;
+    treasuryBalance?: number;
+  };
+  prospectsCount: number;
+  sentProspectsCount: number;
+  canteenOrdersCount: number;
+  challengesFaced: string;
+  recommendations: string;
+  conclusion: string;
+}
+

@@ -22,7 +22,7 @@ import AdminCanteen from './pages/admin/AdminCanteen';
 import AdminDocuments from './pages/admin/AdminDocuments';
 import AdminEvents from './pages/admin/AdminEvents';
 import AdminMembers from './pages/admin/AdminMembers';
-import AdminProspects from './pages/admin/AdminProspects';
+import AdminMandateReport from './pages/admin/AdminMandateReport';
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -50,6 +50,7 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/admin/mandate-report" element={<ProtectedRoute><AdminMandateReport /></ProtectedRoute>} />
         <Route path="/admin/contributions" element={<ProtectedRoute><AdminContributions /></ProtectedRoute>} />
         <Route path="/admin/clubs" element={<ProtectedRoute><AdminClubs /></ProtectedRoute>} />
         <Route path="/admin/gallery" element={<ProtectedRoute><AdminGallery /></ProtectedRoute>} />
@@ -58,7 +59,7 @@ function App() {
         <Route path="/admin/documents" element={<ProtectedRoute><AdminDocuments /></ProtectedRoute>} />
         <Route path="/admin/events" element={<ProtectedRoute><AdminEvents /></ProtectedRoute>} />
         <Route path="/admin/members" element={<ProtectedRoute><AdminMembers /></ProtectedRoute>} />
-        <Route path="/admin/prospects" element={<ProtectedRoute><AdminProspects /></ProtectedRoute>} />
+        <Route path="/admin/prospects" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/*" element={<Navigate to="/admin/dashboard" />} />
       </Routes>
     </HashRouter>

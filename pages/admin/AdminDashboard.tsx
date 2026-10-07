@@ -15,7 +15,8 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Calendar, DollarSign, Users, Briefcase } from 'lucide-react';
+import { Calendar, DollarSign, Users, Briefcase, Award, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const AdminDashboard = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -115,89 +116,119 @@ const AdminDashboard = () => {
     <AdminLayout>
         <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-                <h2 className="text-2xl font-bold text-gray-800">Tableau de Bord</h2>
-                <p className="text-gray-500">Aperçu global des activités du BDE</p>
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Tableau de Bord</h2>
+                <p className="text-gray-500 dark:text-gray-400">Aperçu global des activités du BDE</p>
             </div>
             
-            <div className="flex gap-2 items-center bg-bde-navy p-2 rounded-lg border border-gray-600 shadow-sm">
+            <div className="flex gap-2 items-center bg-bde-navy dark:bg-slate-800 p-2 rounded-lg border border-gray-600 dark:border-slate-700 shadow-sm">
                 <input 
                   type="date" 
                   value={startDate} 
                   onChange={e => setStartDate(e.target.value)} 
-                  className="bg-bde-navy text-white text-sm border-none focus:ring-0 outline-none [color-scheme:dark] cursor-pointer"
+                  className="bg-bde-navy dark:bg-slate-800 text-white text-sm border-none focus:ring-0 outline-none [color-scheme:dark] cursor-pointer"
                 />
                 <span className="text-gray-400 font-bold">-</span>
                 <input 
                   type="date" 
                   value={endDate} 
                   onChange={e => setEndDate(e.target.value)} 
-                  className="bg-bde-navy text-white text-sm border-none focus:ring-0 outline-none [color-scheme:dark] cursor-pointer"
+                  className="bg-bde-navy dark:bg-slate-800 text-white text-sm border-none focus:ring-0 outline-none [color-scheme:dark] cursor-pointer"
                 />
             </div>
         </div>
 
+        {/* Presidential Mandate Report Banner */}
+        <div className="mb-8 p-5 sm:p-6 bg-gradient-to-r from-bde-navy via-slate-900 to-indigo-950 rounded-2xl shadow-lg border border-white/10 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-64 h-64 bg-bde-rose/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="flex items-start sm:items-center gap-4 relative z-10">
+            <span className="p-3 bg-bde-rose text-white rounded-xl shadow-md shrink-0 mt-1 sm:mt-0">
+              <Award size={24} />
+            </span>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs uppercase tracking-wider text-rose-300 font-bold">Bilan Officiel de Mandat</span>
+                <span className="text-xs text-white/40">·</span>
+                <span className="text-xs text-emerald-300 font-medium">À déposer à l'administration</span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-extrabold text-white">
+                Bilan du Mandat de Présidence IFRAN
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-300 mt-1 max-w-2xl">
+                Toutes vos réalisations, événements, clubs, cotisations et innovations numériques sont consolidés. Générez votre rapport officiel détaillé prêt pour l'administration.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/admin/mandate-report"
+            className="inline-flex items-center gap-2 px-5 py-3 bg-bde-rose hover:bg-rose-600 text-white rounded-xl text-sm font-bold shadow-md transition shrink-0 relative z-10"
+          >
+            <span>Accéder au Bilan</span>
+            <ChevronRight size={16} />
+          </Link>
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 reveal" style={{transitionDelay: '0ms'}}>
-                <div className="p-3 rounded-full bg-green-100 text-green-600">
+            <div className="bg-white dark:bg-slate-800/90 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/80 flex items-center gap-4 reveal" style={{transitionDelay: '0ms'}}>
+                <div className="p-3 rounded-full bg-green-100 dark:bg-green-950/60 text-green-600 dark:text-green-400">
                     <DollarSign size={24} />
                 </div>
                 <div>
-                    <p className="text-sm text-gray-500">Recettes Cotisations</p>
-                    <h3 className="text-2xl font-bold text-gray-800">{stats.totalRevenue.toLocaleString()} F</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Recettes Cotisations</p>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white tabular-nums">{stats.totalRevenue.toLocaleString()} F</h3>
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 reveal" style={{transitionDelay: '100ms'}}>
-                <div className="p-3 rounded-full bg-blue-100 text-blue-600">
+            <div className="bg-white dark:bg-slate-800/90 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/80 flex items-center gap-4 reveal" style={{transitionDelay: '100ms'}}>
+                <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
                     <Users size={24} />
                 </div>
                 <div>
-                    <p className="text-sm text-gray-500">Étudiants Cotisants</p>
-                    <h3 className="text-2xl font-bold text-gray-800">{stats.totalPaidCount} <span className="text-sm text-gray-400 font-normal">/ {stats.totalStudents}</span></h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Étudiants Cotisants</p>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white tabular-nums">{stats.totalPaidCount} <span className="text-sm text-gray-400 font-normal">/ {stats.totalStudents}</span></h3>
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 reveal" style={{transitionDelay: '200ms'}}>
-                <div className="p-3 rounded-full bg-purple-100 text-purple-600">
+            <div className="bg-white dark:bg-slate-800/90 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/80 flex items-center gap-4 reveal" style={{transitionDelay: '200ms'}}>
+                <div className="p-3 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
                     <Briefcase size={24} />
                 </div>
                 <div>
-                    <p className="text-sm text-gray-500">Clubs Actifs</p>
-                    <h3 className="text-2xl font-bold text-gray-800">{stats.clubsCount}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Clubs Actifs</p>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white tabular-nums">{stats.clubsCount}</h3>
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 reveal" style={{transitionDelay: '300ms'}}>
-                <div className="p-3 rounded-full bg-orange-100 text-orange-600">
+            <div className="bg-white dark:bg-slate-800/90 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/80 flex items-center gap-4 reveal" style={{transitionDelay: '300ms'}}>
+                <div className="p-3 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400">
                     <Calendar size={24} />
                 </div>
                 <div>
-                    <p className="text-sm text-gray-500">Événements (Période)</p>
-                    <h3 className="text-2xl font-bold text-gray-800">{stats.eventsCount}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Événements (Période)</p>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white tabular-nums">{stats.eventsCount}</h3>
                 </div>
             </div>
         </div>
 
         {/* Charts Section */}
         <div className="grid lg:grid-cols-2 gap-8">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 reveal" style={{transitionDelay: '400ms'}}>
-                <h3 className="font-bold text-lg text-gray-800 mb-6">Répartition des Étudiants par Niveau</h3>
+            <div className="bg-white dark:bg-slate-800/90 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/80 reveal" style={{transitionDelay: '400ms'}}>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-white mb-6">Répartition des Étudiants par Niveau</h3>
                 <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12}} />
                             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                            <Tooltip />
+                            <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }} />
                             <Bar dataKey="value" fill="#E74A67" radius={[4, 4, 0, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
             </div>
 
-             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 reveal" style={{transitionDelay: '500ms'}}>
-                <h3 className="font-bold text-lg text-gray-800 mb-6">Statut des Paiements</h3>
+             <div className="bg-white dark:bg-slate-800/90 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/80 reveal" style={{transitionDelay: '500ms'}}>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-white mb-6">Statut des Paiements</h3>
                 <div className="h-64 flex items-center justify-center">
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
