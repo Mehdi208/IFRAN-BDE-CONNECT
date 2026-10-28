@@ -1,0 +1,6 @@
+{
+  "summary":  "Plan d'implémentation détaillé pour la page d'administration de suivi des polos étudiants, gestion des stocks par couleur/année et taille (S à 3XL), suivi des paiements et acomptes, calcul automatique des réapprovisionnements en cas de rupture, exports PDF/CSV et synchronisation en temps réel via Firebase Firestore.",
+  "updatedAt":  "2026-10-28T16:04:20.978387758Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

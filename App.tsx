@@ -23,6 +23,7 @@ import AdminDocuments from './pages/admin/AdminDocuments';
 import AdminEvents from './pages/admin/AdminEvents';
 import AdminMembers from './pages/admin/AdminMembers';
 import AdminMandateReport from './pages/admin/AdminMandateReport';
+import AdminPolos from './pages/admin/AdminPolos';
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -50,6 +51,7 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/admin/polos" element={<ProtectedRoute><AdminPolos /></ProtectedRoute>} />
         <Route path="/admin/mandate-report" element={<ProtectedRoute><AdminMandateReport /></ProtectedRoute>} />
         <Route path="/admin/contributions" element={<ProtectedRoute><AdminContributions /></ProtectedRoute>} />
         <Route path="/admin/clubs" element={<ProtectedRoute><AdminClubs /></ProtectedRoute>} />

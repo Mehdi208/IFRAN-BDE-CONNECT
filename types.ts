@@ -225,3 +225,31 @@ export interface MandateReportData {
   conclusion?: string;
 }
 
+export type PoloColorYear = 'BLANC_1A' | 'ROUGE_2A' | 'BLEU_3A';
+export type PoloSize = 'S' | 'M' | 'L' | 'XL' | 'XXL' | '3XL';
+
+export interface StudentPoloOrder {
+  id: string;
+  lastName: string;
+  firstName: string;
+  studentClass: string;
+  poloType: PoloColorYear;
+  size: PoloSize;
+  date: string;
+  paymentStatus: 'PAID' | 'PARTIAL' | 'UNPAID';
+  amountPaid: number;
+  totalPrice: number;
+  deliveryStatus: 'DELIVERED' | 'PENDING_STOCK';
+  notes?: string;
+  updatedAt?: string;
+}
+
+export interface PoloInventoryConfig {
+  id: string; // 'main_inventory'
+  unitPrice: number;
+  lowStockThreshold: number;
+  stock: Record<PoloColorYear, Record<PoloSize, number>>;
+  updatedAt?: string;
+}
+
+

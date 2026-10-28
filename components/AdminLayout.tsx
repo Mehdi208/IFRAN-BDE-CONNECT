@@ -18,7 +18,8 @@ import {
   Send,
   Sun,
   Moon,
-  Award
+  Award,
+  Shirt
 } from 'lucide-react';
 import { auth } from '../firebaseConfig';
 import { signOut } from 'firebase/auth';
@@ -59,6 +60,7 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const navItems = [
     { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
+    { path: '/admin/polos', icon: Shirt, label: 'Polos & Stocks' },
     { path: '/admin/mandate-report', icon: Award, label: 'Bilan de Mandat' },
     { path: '/admin/contributions', icon: Wallet, label: 'Cotisations' },
     { path: '/admin/canteen', icon: UtensilsCrossed, label: 'Gestion Cantine' },

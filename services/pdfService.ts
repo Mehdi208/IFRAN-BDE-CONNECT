@@ -1,7 +1,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Student, Club, CinemaSale, FoodOrder, MandateReportData } from '../types';
+import { Student, Club, CinemaSale, FoodOrder, MandateReportData, StudentPoloOrder, PoloInventoryConfig, PoloColorYear, PoloSize } from '../types';
 
 export interface EmailData {
     evtName: string;
@@ -914,3 +914,354 @@ export const generatePresidentMandateReport = (data: MandateReportData) => {
   const filename = `Rapport_Bilan_Mandat_President_${data.presidentName.replace(/\s+/g, '_')}_IFRAN.pdf`;
   doc.save(filename);
 };
+
+// Formatteur sécurisé pour jsPDF (utilise des points '.' au lieu d'espaces insécables '\u202F' qui deviennent '/')
+const formatDotCurrency = (amount: number): string => {
+  const rounded = Math.round(amount || 0);
+  const sign = rounded < 0 ? '-' : '';
+  const absStr = Math.abs(rounded).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${sign}${absStr} FCFA`;
+};
+
+const POLO_LABELS_PDF: Record<PoloColorYear, string> = {
+  BLANC_1A: 'Polo Blanc - 1ère année',
+  ROUGE_2A: 'Polo Rouge - 2e année',
+  BLEU_3A: 'Polo Bleu - 3e année',
+};
+
+const POLO_SIZES_PDF: PoloSize[] = ['S', 'M', 'L', 'XL', 'XXL', '3XL'];
+
+export const generatePoloSupplierOrderPDF = (
+  orders: StudentPoloOrder[],
+  inventory: PoloInventoryConfig,
+  safetyBufferPerSize: number = 0
+) => {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+
+  // Header Banner
+  doc.setFillColor(15, 30, 58);
+  doc.rect(0, 0, pageWidth, 38, 'F');
+  doc.setFillColor(225, 29, 72);
+  doc.rect(0, 38, pageWidth, 2, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('INSTITUT FRANÇAIS DU NUMÉRIQUE (IFRAN)', margin, 13);
+
+  doc.setFontSize(15);
+  doc.text('BON DE COMMANDE & ÉTAT DES STOCKS POLOS', margin, 23);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(203, 213, 225);
+  const dateStr = new Date().toLocaleDateString('fr-FR');
+  doc.text(
+    `Édité le ${dateStr} • BDE & Administration IFRAN • Récapitulatif par Couleur & Taille`,
+    margin,
+    31
+  );
+
+  let y = 48;
+
+  // Build rows for all 3 colors x 6 sizes
+  const tableRows: any[] = [];
+  let totalStockAvailable = 0;
+  let totalDelivered = 0;
+  let totalPending = 0;
+  let totalToOrder = 0;
+
+  (['BLANC_1A', 'ROUGE_2A', 'BLEU_3A'] as PoloColorYear[]).forEach((colorKey) => {
+    POLO_SIZES_PDF.forEach((size) => {
+      const initialStock = inventory.stock?.[colorKey]?.[size] || 0;
+      const deliveredCount = orders.filter(
+        (o) => o.poloType === colorKey && o.size === size && o.deliveryStatus === 'DELIVERED'
+      ).length;
+      const pendingCount = orders.filter(
+        (o) => o.poloType === colorKey && o.size === size && o.deliveryStatus === 'PENDING_STOCK'
+      ).length;
+
+      const availableStock = Math.max(0, initialStock - deliveredCount);
+      const rawDeficit = Math.max(0, pendingCount - availableStock);
+      const toOrder = rawDeficit + (rawDeficit > 0 || availableStock === 0 ? safetyBufferPerSize : 0);
+
+      totalStockAvailable += availableStock;
+      totalDelivered += deliveredCount;
+      totalPending += pendingCount;
+      totalToOrder += toOrder;
+
+      let statusLabel = 'En stock';
+      if (rawDeficit > 0) {
+        statusLabel = `RUPTURE (-${rawDeficit})`;
+      } else if (availableStock === 0) {
+        statusLabel = 'Stock épuisé (0)';
+      } else if (availableStock <= (inventory.lowStockThreshold || 3)) {
+        statusLabel = 'Stock faible';
+      }
+
+      tableRows.push([
+        POLO_LABELS_PDF[colorKey],
+        size,
+        String(initialStock),
+        String(deliveredCount),
+        String(availableStock),
+        String(pendingCount),
+        statusLabel,
+        toOrder > 0 ? `${toOrder} à commander` : '0',
+      ]);
+    });
+  });
+
+  // Summary KPIs
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 30, 58);
+  doc.text(
+    `Synthèse Globale : ${totalDelivered} remis • ${totalStockAvailable} en stock physique • ${totalPending} en attente • ${totalToOrder} polos à commander`,
+    margin,
+    y
+  );
+  y += 5;
+
+  autoTable(doc, {
+    startY: y,
+    head: [
+      [
+        'Couleur / Niveau',
+        'Taille',
+        'Appro.',
+        'Remis',
+        'Dispo',
+        'En attente',
+        'État du Stock',
+        'Quantité à Commander',
+      ],
+    ],
+    body: tableRows,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [15, 30, 58],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.2,
+    },
+    columnStyles: {
+      0: { cellWidth: 42, fontStyle: 'bold' },
+      1: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+      2: { cellWidth: 16, halign: 'center' },
+      3: { cellWidth: 16, halign: 'center' },
+      4: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+      5: { cellWidth: 20, halign: 'center' },
+      6: { cellWidth: 28, halign: 'center' },
+      7: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
+    },
+    didParseCell: (hookData) => {
+      if (hookData.section === 'body') {
+        const rowRaw = hookData.row.raw as string[];
+        const toOrderText = rowRaw[7] || '0';
+        const stateText = rowRaw[6] || '';
+        if (toOrderText !== '0') {
+          hookData.cell.styles.fillColor = [254, 242, 242];
+          if (hookData.column.index === 7 || hookData.column.index === 6) {
+            hookData.cell.styles.textColor = [185, 28, 28];
+          }
+        } else if (stateText.includes('faible') || stateText.includes('épuisé')) {
+          hookData.cell.styles.fillColor = [255, 251, 235];
+          if (hookData.column.index === 6) {
+            hookData.cell.styles.textColor = [180, 83, 9];
+          }
+        }
+      }
+    },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 10;
+
+  // Urgent Order Box if any items need ordering
+  const urgentItems = tableRows.filter((r) => r[7] !== '0');
+  if (urgentItems.length > 0) {
+    if (y + 35 > doc.internal.pageSize.getHeight() - 15) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(185, 28, 28);
+    doc.text(
+      `RÉCAPITULATIF EXACT DES POLOS À COMMANDER (${totalToOrder} UNITÉS AU TOTAL)`,
+      margin,
+      y
+    );
+    y += 3;
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Couleur & Année', 'Taille Précise', 'En Attente', 'Stock Dispo', 'Nombre Exact à Commander']],
+      body: urgentItems.map((r) => [r[0], r[1], r[5], r[4], r[7]]),
+      theme: 'grid',
+      headStyles: {
+        fillColor: [185, 28, 28],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8.5,
+      },
+      styles: {
+        fontSize: 8.5,
+        cellPadding: 2.5,
+      },
+      columnStyles: {
+        0: { cellWidth: 58, fontStyle: 'bold' },
+        1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
+        2: { cellWidth: 28, halign: 'center' },
+        3: { cellWidth: 28, halign: 'center' },
+        4: { cellWidth: 43, halign: 'right', fontStyle: 'bold' },
+      },
+    });
+  }
+
+  doc.save(`Bon_De_Commande_Polos_IFRAN_${dateStr.replace(/\//g, '-')}.pdf`);
+};
+
+export const generatePoloStudentsListPDF = (
+  orders: StudentPoloOrder[],
+  filterLabel: string = 'Tous les étudiants'
+) => {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+
+  // Header Banner
+  doc.setFillColor(15, 30, 58);
+  doc.rect(0, 0, pageWidth, 34, 'F');
+  doc.setFillColor(225, 29, 72);
+  doc.rect(0, 34, pageWidth, 2, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('INSTITUT FRANÇAIS DU NUMÉRIQUE (IFRAN)', margin, 11);
+
+  doc.setFontSize(14);
+  doc.text('REGISTRE OFFICIEL DE SUIVI DES POLOS ÉTUDIANTS', margin, 20);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(203, 213, 225);
+  const dateStr = new Date().toLocaleDateString('fr-FR');
+  doc.text(`Édité le ${dateStr} • Filtre : ${filterLabel} • Total : ${orders.length} étudiant(s)`, margin, 28);
+
+  const totalPaidAmount = orders.reduce((sum, o) => sum + (o.amountPaid || 0), 0);
+  const totalRemaining = orders.reduce(
+    (sum, o) => sum + Math.max(0, (o.totalPrice || 0) - (o.amountPaid || 0)),
+    0
+  );
+
+  let y = 43;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 30, 58);
+  doc.text(
+    `Total Encaissé : ${formatDotCurrency(totalPaidAmount)}   |   Reste à recouvrer : ${formatDotCurrency(totalRemaining)}`,
+    margin,
+    y
+  );
+
+  const bodyRows = orders.map((o, idx) => {
+    const payLabel =
+      o.paymentStatus === 'PAID'
+        ? 'Payé'
+        : o.paymentStatus === 'PARTIAL'
+        ? `Acompte (${formatDotCurrency(o.amountPaid)})`
+        : 'Non payé';
+    const rem = Math.max(0, (o.totalPrice || 0) - (o.amountPaid || 0));
+    const delivLabel = o.deliveryStatus === 'DELIVERED' ? 'Polo remis' : 'En attente de stock';
+
+    return [
+      String(idx + 1),
+      o.lastName.toUpperCase(),
+      o.firstName,
+      o.studentClass,
+      POLO_LABELS_PDF[o.poloType] || o.poloType,
+      o.size,
+      o.date ? new Date(o.date).toLocaleDateString('fr-FR') : '-',
+      payLabel,
+      rem > 0 ? formatDotCurrency(rem) : '0 FCFA',
+      delivLabel,
+    ];
+  });
+
+  autoTable(doc, {
+    startY: y + 4,
+    head: [
+      [
+        '#',
+        'Nom',
+        'Prénom(s)',
+        'Classe',
+        'Polo (Couleur / Année)',
+        'Taille',
+        'Date',
+        'Paiement',
+        'Reste à Payer',
+        'Remise',
+      ],
+    ],
+    body: bodyRows,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [15, 30, 58],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.2,
+      overflow: 'linebreak',
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 30, fontStyle: 'bold' },
+      2: { cellWidth: 36 },
+      3: { cellWidth: 24 },
+      4: { cellWidth: 44, fontStyle: 'bold' },
+      5: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+      6: { cellWidth: 22, halign: 'center' },
+      7: { cellWidth: 34 },
+      8: { cellWidth: 26, halign: 'right' },
+      9: { cellWidth: 29, halign: 'center', fontStyle: 'bold' },
+    },
+    didParseCell: (hookData) => {
+      if (hookData.section === 'body') {
+        const rowRaw = hookData.row.raw as string[];
+        if (hookData.column.index === 7) {
+          if (rowRaw[7] === 'Payé') {
+            hookData.cell.styles.textColor = [22, 101, 52];
+            hookData.cell.styles.fontStyle = 'bold';
+          } else if (rowRaw[7] === 'Non payé') {
+            hookData.cell.styles.textColor = [185, 28, 28];
+            hookData.cell.styles.fontStyle = 'bold';
+          } else {
+            hookData.cell.styles.textColor = [180, 83, 9];
+          }
+        }
+        if (hookData.column.index === 9) {
+          if (rowRaw[9] === 'Polo remis') {
+            hookData.cell.styles.textColor = [22, 101, 52];
+          } else {
+            hookData.cell.styles.textColor = [185, 28, 28];
+          }
+        }
+      }
+    },
+  });
+
+  doc.save(`Registre_Polos_Etudiants_IFRAN_${dateStr.replace(/\//g, '-')}.pdf`);
+};
+

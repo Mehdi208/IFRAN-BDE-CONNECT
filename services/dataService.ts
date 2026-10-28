@@ -1,7 +1,7 @@
 
 import { db, auth } from '../firebaseConfig';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, writeBatch, getDoc, onSnapshot } from 'firebase/firestore';
-import { Club, Atelier, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord, Product, FoodOrder, GalleryItem, AssinieRegistration, NazaRegistration, ProspectContact, CampaignTemplate, RelancerProfile } from '../types';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, writeBatch, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { Club, Atelier, Event, Member, Mentor, Student, CinemaSale, ClubRegistration, DocumentRecord, Product, FoodOrder, GalleryItem, AssinieRegistration, NazaRegistration, ProspectContact, CampaignTemplate, RelancerProfile, StudentPoloOrder, PoloInventoryConfig } from '../types';
 
 export const CINEMA_CLUB_ID = 'atelier-cinema-default';
 
@@ -799,7 +799,6 @@ export const dataService = {
   saveCampaignTemplate: async (body: string, templateId: string = 'default') => {
     if (db) {
       try {
-        const { setDoc } = await import('firebase/firestore');
         await setDoc(doc(db, 'campaign_templates', templateId), { body });
       } catch (error) {
         console.warn("Error saving template to Firestore:", error);
@@ -807,5 +806,173 @@ export const dataService = {
     }
     saveToStorage(`campaign_template_${templateId}`, body);
     return body;
+  },
+
+  // --- GESTION DES POLOS ÉTUDIANTS & STOCKS TEMPS RÉEL ---
+  getDefaultPoloInventory: (): PoloInventoryConfig => ({
+    id: 'main_inventory',
+    unitPrice: 5000,
+    lowStockThreshold: 3,
+    stock: {
+      BLANC_1A: { S: 15, M: 25, L: 25, XL: 15, XXL: 8, '3XL': 4 },
+      ROUGE_2A: { S: 15, M: 25, L: 25, XL: 15, XXL: 8, '3XL': 4 },
+      BLEU_3A: { S: 10, M: 20, L: 20, XL: 12, XXL: 6, '3XL': 3 },
+    },
+    updatedAt: new Date().toISOString()
+  }),
+
+  subscribeToPoloOrders: (callback: (orders: StudentPoloOrder[]) => void) => {
+    const localOrders = getFromStorage<StudentPoloOrder[]>('polo_orders', []);
+    callback(localOrders);
+
+    if (!db) return () => {};
+    try {
+      return onSnapshot(collection(db, 'polo_orders'), (snapshot) => {
+        const firestoreOrders: StudentPoloOrder[] = snapshot.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        } as StudentPoloOrder));
+        firestoreOrders.sort((a, b) => (b.updatedAt || b.date || '').localeCompare(a.updatedAt || a.date || ''));
+        saveToStorage('polo_orders', firestoreOrders);
+        callback(firestoreOrders);
+      }, (err) => {
+        console.warn("Erreur écoute temps réel polo_orders:", err);
+      });
+    } catch (e) {
+      console.warn("Impossible de souscrire à polo_orders:", e);
+      return () => {};
+    }
+  },
+
+  fetchPoloOrders: async (): Promise<StudentPoloOrder[]> => {
+    const localOrders = getFromStorage<StudentPoloOrder[]>('polo_orders', []);
+    if (db) {
+      try {
+        const snapshot = await getDocs(collection(db, 'polo_orders'));
+        const firestoreOrders: StudentPoloOrder[] = snapshot.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        } as StudentPoloOrder));
+        firestoreOrders.sort((a, b) => (b.updatedAt || b.date || '').localeCompare(a.updatedAt || a.date || ''));
+        saveToStorage('polo_orders', firestoreOrders);
+        return firestoreOrders;
+      } catch (e) {
+        console.warn("Erreur lecture polo_orders Firestore, repli local:", e);
+      }
+    }
+    return localOrders;
+  },
+
+  addPoloOrder: async (order: Omit<StudentPoloOrder, 'id'>): Promise<StudentPoloOrder[]> => {
+    const newId = 'polo_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7);
+    const payload: StudentPoloOrder = {
+      ...order,
+      id: newId,
+      updatedAt: new Date().toISOString()
+    };
+    const curr = getFromStorage<StudentPoloOrder[]>('polo_orders', []);
+    const updated = [payload, ...curr];
+    saveToStorage('polo_orders', updated);
+
+    if (db) {
+      try {
+        const { id, ...docData } = payload;
+        await setDoc(doc(db, 'polo_orders', id), sanitizeData(docData), { merge: true });
+      } catch (e) {
+        console.warn("Erreur écriture polo_orders Firestore:", e);
+      }
+    }
+    return updated;
+  },
+
+  updatePoloOrder: async (order: StudentPoloOrder): Promise<StudentPoloOrder[]> => {
+    const payload: StudentPoloOrder = {
+      ...order,
+      updatedAt: new Date().toISOString()
+    };
+    const curr = getFromStorage<StudentPoloOrder[]>('polo_orders', []);
+    const updated = curr.map(item => item.id === payload.id ? payload : item);
+    saveToStorage('polo_orders', updated);
+
+    if (db) {
+      try {
+        const { id, ...docData } = payload;
+        await setDoc(doc(db, 'polo_orders', id), sanitizeData(docData), { merge: true });
+      } catch (e) {
+        console.warn("Erreur mise à jour polo_orders Firestore:", e);
+      }
+    }
+    return updated;
+  },
+
+  deletePoloOrder: async (id: string): Promise<StudentPoloOrder[]> => {
+    const curr = getFromStorage<StudentPoloOrder[]>('polo_orders', []);
+    const updated = curr.filter(item => item.id !== id);
+    saveToStorage('polo_orders', updated);
+
+    if (db) {
+      try {
+        await deleteDoc(doc(db, 'polo_orders', id));
+      } catch (e) {
+        console.warn("Erreur suppression polo_orders Firestore:", e);
+      }
+    }
+    return updated;
+  },
+
+  subscribeToPoloInventory: (callback: (inventory: PoloInventoryConfig) => void) => {
+    const defaultInv = dataService.getDefaultPoloInventory();
+    const localInv = getFromStorage<PoloInventoryConfig>('polo_inventory', defaultInv);
+    callback(localInv);
+
+    if (!db) return () => {};
+    try {
+      return onSnapshot(doc(db, 'polo_inventory', 'main_inventory'), (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data() as Omit<PoloInventoryConfig, 'id'>;
+          const merged: PoloInventoryConfig = {
+            ...defaultInv,
+            ...data,
+            id: 'main_inventory',
+            stock: {
+              BLANC_1A: { ...defaultInv.stock.BLANC_1A, ...(data.stock?.BLANC_1A || {}) },
+              ROUGE_2A: { ...defaultInv.stock.ROUGE_2A, ...(data.stock?.ROUGE_2A || {}) },
+              BLEU_3A: { ...defaultInv.stock.BLEU_3A, ...(data.stock?.BLEU_3A || {}) },
+            }
+          };
+          saveToStorage('polo_inventory', merged);
+          callback(merged);
+        } else {
+          // Initialize in Firestore so all connected admins share the same baseline
+          const { id, ...initData } = localInv;
+          setDoc(doc(db, 'polo_inventory', 'main_inventory'), sanitizeData(initData), { merge: true }).catch(() => {});
+          callback(localInv);
+        }
+      }, (err) => {
+        console.warn("Erreur écoute temps réel polo_inventory:", err);
+      });
+    } catch (e) {
+      console.warn("Impossible de souscrire à polo_inventory:", e);
+      return () => {};
+    }
+  },
+
+  savePoloInventory: async (inventory: PoloInventoryConfig): Promise<PoloInventoryConfig> => {
+    const updated: PoloInventoryConfig = {
+      ...inventory,
+      id: 'main_inventory',
+      updatedAt: new Date().toISOString()
+    };
+    saveToStorage('polo_inventory', updated);
+
+    if (db) {
+      try {
+        const { id, ...docData } = updated;
+        await setDoc(doc(db, 'polo_inventory', 'main_inventory'), sanitizeData(docData), { merge: true });
+      } catch (e) {
+        console.warn("Erreur sauvegarde polo_inventory Firestore:", e);
+      }
+    }
+    return updated;
   }
 };
