@@ -21,6 +21,9 @@
     "recharts": "^2.12.3",
     "serve": "^14.2.1"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.66.0"
+  },
   "devDependencies": {
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
