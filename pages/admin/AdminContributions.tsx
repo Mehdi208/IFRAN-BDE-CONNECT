@@ -29,10 +29,15 @@ const AdminContributions = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
   const levels = [
-    "B1 COM", "B1 CREA", "B1 DEV",
-    "B2 Com", "B2 Dev", "B2 Créa",
-    "B3 Com", "B3 Dev", "B3 Créa",
-    "Master 1", "Master 2"
+    'B1 Créa',
+    'B1 Com',
+    'B1 Dev',
+    'B2 Créa',
+    'B2 Com',
+    'B2 Dev',
+    'B3 Créa',
+    'B3 Com',
+    'B3 Dev',
   ];
 
   const inputStyle = "w-full bg-bde-navy text-white border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-bde-rose outline-none placeholder-gray-400";

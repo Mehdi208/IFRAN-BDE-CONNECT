@@ -809,17 +809,32 @@ export const dataService = {
   },
 
   // --- GESTION DES POLOS ÉTUDIANTS & STOCKS TEMPS RÉEL ---
-  getDefaultPoloInventory: (): PoloInventoryConfig => ({
+    getDefaultPoloInventory: (): PoloInventoryConfig => ({
     id: 'main_inventory',
     unitPrice: 5000,
     lowStockThreshold: 3,
     stock: {
-      BLANC_1A: { S: 15, M: 25, L: 25, XL: 15, XXL: 8, '3XL': 4 },
-      ROUGE_2A: { S: 15, M: 25, L: 25, XL: 15, XXL: 8, '3XL': 4 },
-      BLEU_3A: { S: 10, M: 20, L: 20, XL: 12, XXL: 6, '3XL': 3 },
+      BLANC_1A: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
+      ROUGE_2A: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
+      BLEU_3A: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
     },
     updatedAt: new Date().toISOString()
   }),
+
+  resetPoloInventoryToZero: async (): Promise<PoloInventoryConfig> => {
+    const zeroInv: PoloInventoryConfig = {
+      id: 'main_inventory',
+      unitPrice: 5000,
+      lowStockThreshold: 3,
+      stock: {
+        BLANC_1A: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
+        ROUGE_2A: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
+        BLEU_3A: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
+      },
+      updatedAt: new Date().toISOString()
+    };
+    return await dataService.savePoloInventory(zeroInv);
+  },
 
   subscribeToPoloOrders: (callback: (orders: StudentPoloOrder[]) => void) => {
     const localOrders = getFromStorage<StudentPoloOrder[]>('polo_orders', []);

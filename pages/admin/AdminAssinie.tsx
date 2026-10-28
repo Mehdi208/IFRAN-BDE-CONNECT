@@ -16,7 +16,17 @@ const AdminAssinie = () => {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   // Edit/Add Modal
-  const levels = ["B1 COM", "B1 CREA", "B1 DEV", "B2 COM", "B2 CREA", "B2 DEV", "B3 COM", "B3 CREA", "B3 DEV", "Master 1", "Master 2"];
+  const levels = [
+    'B1 Créa',
+    'B1 Com',
+    'B1 Dev',
+    'B2 Créa',
+    'B2 Com',
+    'B2 Dev',
+    'B3 Créa',
+    'B3 Com',
+    'B3 Dev',
+  ];
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReg, setEditingReg] = useState<AssinieRegistration | null>(null);
   const [formData, setFormData] = useState<Partial<AssinieRegistration>>({

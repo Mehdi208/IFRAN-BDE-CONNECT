@@ -6,6 +6,7 @@ import {
   PoloInventoryConfig,
   PoloColorYear,
   PoloSize,
+  IFRAN_CLASSES,
 } from '../../types';
 import {
   generatePoloSupplierOrderPDF,
@@ -87,19 +88,7 @@ const POLO_COLORS: {
 
 const POLO_SIZES: PoloSize[] = ['S', 'M', 'L', 'XL', 'XXL', '3XL'];
 
-const SUGGESTED_CLASSES = [
-  'B1 Créa',
-  'B1 Dev',
-  'B1 Com',
-  'B2 Créa',
-  'B2 Dev',
-  'B2 Com',
-  'B3 Créa',
-  'B3 Dev',
-  'B3 Com',
-  'Prépa IA & Data 1',
-  'Prépa IA & Data 2',
-];
+const IFRAN_CLASSES_LIST = IFRAN_CLASSES;
 
 const formatCurrencyDots = (val: number): string => {
   const rounded = Math.round(val || 0);
@@ -170,13 +159,45 @@ const AdminPolos: React.FC = () => {
   // Automatically suggest Polo Color when class changes in add mode
   const handleClassChange = (newClass: string) => {
     setStudentClass(newClass);
-    const upper = newClass.toUpperCase();
-    if (upper.includes('B1') || upper.includes('1')) {
-      setPoloType('BLANC_1A');
-    } else if (upper.includes('B2') || upper.includes('2')) {
-      setPoloType('ROUGE_2A');
-    } else if (upper.includes('B3') || upper.includes('3')) {
-      setPoloType('BLEU_3A');
+    let nextPolo: PoloColorYear = poloType;
+    if (newClass.startsWith('B1')) {
+      nextPolo = 'BLANC_1A';
+    } else if (newClass.startsWith('B2')) {
+      nextPolo = 'ROUGE_2A';
+    } else if (newClass.startsWith('B3')) {
+      nextPolo = 'BLEU_3A';
+    }
+    setPoloType(nextPolo);
+
+    if (!editingOrder) {
+      const liveAvail = stockMatrix[nextPolo]?.[size]?.available ?? 0;
+      setDeliveryStatus(liveAvail > 0 ? 'DELIVERED' : 'PENDING_STOCK');
+    }
+  };
+
+  const handlePoloTypeChange = (nextPolo: PoloColorYear) => {
+    setPoloType(nextPolo);
+    if (!editingOrder) {
+      const liveAvail = stockMatrix[nextPolo]?.[size]?.available ?? 0;
+      setDeliveryStatus(liveAvail > 0 ? 'DELIVERED' : 'PENDING_STOCK');
+    }
+  };
+
+  const handleSizeChange = (nextSize: PoloSize) => {
+    setSize(nextSize);
+    if (!editingOrder) {
+      const liveAvail = stockMatrix[poloType]?.[nextSize]?.available ?? 0;
+      setDeliveryStatus(liveAvail > 0 ? 'DELIVERED' : 'PENDING_STOCK');
+    }
+  };
+
+  const handleResetStockToZero = async () => {
+    if (window.confirm("Êtes-vous sûr de vouloir réinitialiser l'ensemble des stocks de polos à 0 ?")) {
+      const zeroInv = await dataService.resetPoloInventoryToZero();
+      setInventory(zeroInv);
+      setDraftInventory(zeroInv);
+      setRestockToast("Le stock total a été remis à 0 avec succès.");
+      setTimeout(() => setRestockToast(null), 4000);
     }
   };
 
@@ -219,7 +240,8 @@ const AdminPolos: React.FC = () => {
         ).length;
 
         const available = Math.max(0, initialStock - delivered);
-        const deficit = Math.max(0, pending - available);
+        const totalDemand = delivered + pending;
+        const deficit = Math.max(0, totalDemand - initialStock);
         const toOrder =
           deficit > 0
             ? deficit + safetyBuffer
@@ -519,6 +541,12 @@ const AdminPolos: React.FC = () => {
       await dataService.addPoloOrder(payload);
     }
     setIsModalOpen(false);
+    setRestockToast(
+      editingOrder
+        ? `Commande mise à jour pour ${payload.firstName} ${payload.lastName} (${payload.studentClass}) !`
+        : `Nouvelle commande enregistrée pour ${payload.firstName} ${payload.lastName} (${payload.studentClass}) !`
+    );
+    setTimeout(() => setRestockToast(null), 4000);
   };
 
   // Quick 1-click toggles in student table
@@ -663,7 +691,16 @@ const AdminPolos: React.FC = () => {
               className="px-4 py-2.5 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 whitespace-nowrap shrink-0"
             >
               <Package size={16} />
-              <span>Configurer le Stock Initial</span>
+              <span>Configurer le Stock</span>
+            </button>
+
+            <button
+              onClick={handleResetStockToZero}
+              className="px-4 py-2.5 text-xs font-semibold rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors flex items-center gap-2 whitespace-nowrap shrink-0"
+              title="Remettre toutes les quantités physiques de stock à 0"
+            >
+              <Trash2 size={15} />
+              <span>Mettre le Stock à 0</span>
             </button>
 
             <button
@@ -1617,20 +1654,22 @@ const AdminPolos: React.FC = () => {
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Classe / Filière *
                   </label>
-                  <input
-                    type="text"
-                    list="ifran-classes-list"
+                  <select
                     required
                     value={studentClass}
                     onChange={(e) => handleClassChange(e.target.value)}
-                    placeholder="Ex: B1 Créa, B2 Dev, B3 Com..."
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
-                  />
-                  <datalist id="ifran-classes-list">
-                    {SUGGESTED_CLASSES.map((c) => (
-                      <option key={c} value={c} />
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-bde-rose focus:border-bde-rose transition-colors"
+                  >
+                    <option value="" disabled>-- Sélectionner la classe --</option>
+                    {IFRAN_CLASSES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
                     ))}
-                  </datalist>
+                    {studentClass && !IFRAN_CLASSES.includes(studentClass as any) && (
+                      <option value={studentClass}>{studentClass} (Personnalisée)</option>
+                    )}
+                  </select>
                 </div>
 
                 <div>
@@ -1659,7 +1698,7 @@ const AdminPolos: React.FC = () => {
                       <button
                         key={c.key}
                         type="button"
-                        onClick={() => setPoloType(c.key)}
+                        onClick={() => handlePoloTypeChange(c.key)}
                         className={`p-3 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
                           isSelected
                             ? 'border-bde-rose bg-rose-50/60 dark:bg-rose-950/40 font-bold text-slate-900 dark:text-white'
@@ -1712,14 +1751,7 @@ const AdminPolos: React.FC = () => {
                       <button
                         key={sz}
                         type="button"
-                        onClick={() => {
-                          setSize(sz);
-                          if (!editingOrder) {
-                            setDeliveryStatus(
-                              avail > 0 ? 'DELIVERED' : 'PENDING_STOCK'
-                            );
-                          }
-                        }}
+                        onClick={() => handleSizeChange(sz)}
                         className={`py-2.5 px-2 rounded-xl border text-center font-mono transition-all ${
                           isSelected
                             ? 'border-bde-rose bg-bde-rose text-white font-extrabold'
@@ -1818,8 +1850,20 @@ const AdminPolos: React.FC = () => {
                 </div>
               </div>
 
-              {/* Delivery Status */}
               <div>
+                {/* Alerte contextuelle si rupture de stock */}
+                {(selectedModalCell?.available ?? 0) <= 0 && (
+                  <div className="mb-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
+                    <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">
+                      <span className="font-bold">Stock physique actuellement à 0 pour cette variante ({POLO_COLORS.find(c => c.key === poloType)?.shortLabel} - Taille {size}).</span>
+                      <p className="text-[11px] mt-0.5 opacity-90">
+                        L'étudiant est automatiquement positionné sur <strong>« En attente de stock »</strong> afin d'être comptabilisé dans les besoins du bon de commande fournisseur.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Remise physique du Polo *
                 </label>

@@ -225,6 +225,20 @@ export interface MandateReportData {
   conclusion?: string;
 }
 
+export const IFRAN_CLASSES = [
+  'B1 Créa',
+  'B1 Com',
+  'B1 Dev',
+  'B2 Créa',
+  'B2 Com',
+  'B2 Dev',
+  'B3 Créa',
+  'B3 Com',
+  'B3 Dev',
+] as const;
+
+export type IfranClass = typeof IFRAN_CLASSES[number];
+
 export type PoloColorYear = 'BLANC_1A' | 'ROUGE_2A' | 'BLEU_3A';
 export type PoloSize = 'S' | 'M' | 'L' | 'XL' | 'XXL' | '3XL';
 

@@ -984,8 +984,11 @@ export const generatePoloSupplierOrderPDF = (
       ).length;
 
       const availableStock = Math.max(0, initialStock - deliveredCount);
-      const rawDeficit = Math.max(0, pendingCount - availableStock);
-      const toOrder = rawDeficit + (rawDeficit > 0 || availableStock === 0 ? safetyBufferPerSize : 0);
+      const totalRequested = deliveredCount + pendingCount;
+      const rawDeficit = Math.max(0, totalRequested - initialStock);
+      const toOrder = rawDeficit > 0
+        ? rawDeficit + safetyBufferPerSize
+        : (availableStock === 0 && safetyBufferPerSize > 0 ? safetyBufferPerSize : 0);
 
       totalStockAvailable += availableStock;
       totalDelivered += deliveredCount;
