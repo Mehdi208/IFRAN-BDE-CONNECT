@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
@@ -25,6 +24,9 @@ import AdminMembers from './pages/admin/AdminMembers';
 import AdminMandateReport from './pages/admin/AdminMandateReport';
 import AdminPolos from './pages/admin/AdminPolos';
 
+// PWA Install Prompt Notification
+import PwaInstallPrompt from './components/PwaInstallPrompt';
+
 const ScrollToTop = () => {
   const { pathname } = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
@@ -40,6 +42,7 @@ function App() {
   return (
     <HashRouter>
       <ScrollToTop />
+      <PwaInstallPrompt />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/calendar" element={<CalendarPage />} />
