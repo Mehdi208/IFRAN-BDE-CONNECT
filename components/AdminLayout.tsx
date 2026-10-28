@@ -64,6 +64,32 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   }, []);
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsMobileSidebarOpen(false);
+  }, [location.pathname]);
+
+  // Prevent background scrolling when mobile sidebar is open & support Escape key
+  useEffect(() => {
+    if (isMobileSidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMobileSidebarOpen]);
+
   const toggleDarkMode = () => {
     setIsDarkMode(prev => !prev);
   };
@@ -105,13 +131,22 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   
   const currentPage = navItems.find(item => item.path === location.pathname);
 
-  useEffect(() => {
-    setIsMobileSidebarOpen(false);
-  }, [location.pathname]);
-
-  const SidebarContent = () => (
+  const SidebarContent: React.FC<{ isMobile?: boolean }> = ({ isMobile = false }) => (
     <>
-      <div className="p-6 border-b border-white/10 dark:border-slate-800 flex flex-col items-center text-center">
+      <div className="relative p-6 border-b border-white/10 dark:border-slate-800 flex flex-col items-center text-center">
+        {/* Bouton pour fermer la sidebar sur mobile */}
+        {isMobile && (
+          <button
+            type="button"
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="absolute top-4 right-4 p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 dark:hover:bg-slate-800 transition-colors focus:outline-none"
+            title="Fermer le menu"
+            aria-label="Fermer le menu"
+          >
+            <X size={20} />
+          </button>
+        )}
+
         <div className="w-16 h-16 bg-white/10 dark:bg-slate-800/80 rounded-full flex items-center justify-center mb-3 text-2xl font-bold text-white border-2 border-bde-rose overflow-hidden shadow-lg shadow-rose-900/20">
            {!logoError ? (
                <img src="/logo.png?v=4" alt="BDE" className="w-full h-full object-cover" onError={() => setLogoError(true)} />
@@ -131,6 +166,9 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Link 
               key={item.path} 
               to={item.path} 
+              onClick={() => {
+                if (isMobile) setIsMobileSidebarOpen(false);
+              }}
               className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-150 ${
                 isActive 
                   ? 'bg-bde-rose text-white shadow-lg shadow-rose-900/30 font-bold translate-x-1' 
@@ -190,21 +228,46 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className={`min-h-screen transition-colors duration-200 ${isDarkMode ? 'dark bg-[#0a0f1d] text-slate-100' : 'bg-slate-100/90 text-slate-900'} flex`}>
-      <aside className={`w-64 ${isDarkMode ? 'bg-[#0d1527] border-r border-slate-800/80 shadow-2xl' : 'bg-bde-navy text-white shadow-xl'} text-white hidden md:flex flex-col fixed h-full z-50`}>
-        <SidebarContent />
+      {/* Desktop Sidebar (Permanent) */}
+      <aside className={`w-64 ${isDarkMode ? 'bg-[#0d1527] border-r border-slate-800/80 shadow-2xl' : 'bg-bde-navy text-white shadow-xl'} text-white hidden md:flex flex-col fixed h-full z-40`}>
+        <SidebarContent isMobile={false} />
       </aside>
 
-      <div className={`fixed inset-0 z-50 md:hidden transition-transform duration-300 ease-in-out ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <aside className={`w-64 ${isDarkMode ? 'bg-[#0d1527] border-r border-slate-800' : 'bg-bde-navy'} text-white flex flex-col h-full shadow-2xl`}>
-          <SidebarContent />
-        </aside>
-      </div>
+      {/* Mobile Drawer & Backdrop */}
+      {isMobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          {/* Backdrop (Dark overlay with blur) */}
+          <div
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+            aria-hidden="true"
+          />
 
-      {isMobileSidebarOpen && <div onClick={() => setIsMobileSidebarOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"></div>}
+          {/* Drawer Sidebar */}
+          <aside className={`relative w-72 max-w-[82vw] ${isDarkMode ? 'bg-[#0d1527] border-r border-slate-800' : 'bg-bde-navy'} text-white flex flex-col h-full shadow-2xl z-10 animate-in slide-in-from-left duration-250`}>
+            <SidebarContent isMobile={true} />
+          </aside>
 
+          {/* Clickable Area on the Right to close immediately */}
+          <div
+            className="flex-1 h-full z-10 cursor-pointer"
+            onClick={() => setIsMobileSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        </div>
+      )}
+
+      {/* Main Content Area */}
       <main className="flex-1 md:ml-64 p-4 sm:p-8 overflow-y-auto min-h-screen">
+        {/* Mobile Top Header */}
         <div className={`md:hidden mb-6 flex justify-between items-center ${isDarkMode ? 'bg-[#131b2e] border border-slate-800 text-white' : 'bg-white border border-gray-200 text-bde-navy'} p-4 rounded-xl shadow-sm sticky top-0 z-30 backdrop-blur-md`}>
-          <button onClick={() => setIsMobileSidebarOpen(true)} className="p-1 text-inherit">
+          <button 
+            type="button"
+            onClick={() => setIsMobileSidebarOpen(true)} 
+            className="p-1.5 rounded-lg text-inherit hover:bg-white/10 dark:hover:bg-slate-800 transition-colors"
+            title="Ouvrir le menu"
+            aria-label="Ouvrir le menu"
+          >
             <Menu size={24} />
           </button>
           <h2 className="font-extrabold text-inherit text-base">{currentPage?.label || 'Administration'}</h2>
