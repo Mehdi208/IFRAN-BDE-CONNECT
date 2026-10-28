@@ -1020,7 +1020,6 @@ export const generatePoloSupplierOrderPDF = (
         String(initialStock),
         String(deliveredCount),
         String(availableStock),
-        String(pendingCount),
         statusLabel,
         toOrder > 0 ? String(toOrder) : '0',
       ]);
@@ -1032,7 +1031,7 @@ export const generatePoloSupplierOrderPDF = (
   doc.setFontSize(10);
   doc.setTextColor(15, 30, 58);
   doc.text(
-    `Synthèse Globale : ${totalDelivered} remis • ${totalStockAvailable} en stock physique • ${totalPending} en attente • ${totalToOrder} polos à commander`,
+    `Synthèse Globale : ${totalDelivered} remis • ${totalStockAvailable} en stock physique • ${totalToOrder} polos à commander`,
     margin,
     y
   );
@@ -1047,7 +1046,6 @@ export const generatePoloSupplierOrderPDF = (
         'Appro.',
         'Remis',
         'Dispo',
-        'En attente',
         'État du Stock',
         'Quantité à Commander',
       ],
@@ -1065,28 +1063,27 @@ export const generatePoloSupplierOrderPDF = (
       cellPadding: 2.2,
     },
     columnStyles: {
-      0: { cellWidth: 42, fontStyle: 'bold' },
-      1: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
-      2: { cellWidth: 16, halign: 'center' },
-      3: { cellWidth: 16, halign: 'center' },
-      4: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
-      5: { cellWidth: 20, halign: 'center' },
-      6: { cellWidth: 28, halign: 'center' },
-      7: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
+      0: { cellWidth: 46, fontStyle: 'bold' },
+      1: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+      2: { cellWidth: 18, halign: 'center' },
+      3: { cellWidth: 18, halign: 'center' },
+      4: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+      5: { cellWidth: 36, halign: 'center' },
+      6: { cellWidth: 34, halign: 'right', fontStyle: 'bold' },
     },
     didParseCell: (hookData) => {
       if (hookData.section === 'body') {
         const rowRaw = hookData.row.raw as string[];
-        const toOrderText = rowRaw[7] || '0';
-        const stateText = rowRaw[6] || '';
+        const toOrderText = rowRaw[6] || '0';
+        const stateText = rowRaw[5] || '';
         if (toOrderText !== '0') {
           hookData.cell.styles.fillColor = [254, 242, 242];
-          if (hookData.column.index === 7 || hookData.column.index === 6) {
+          if (hookData.column.index === 6 || hookData.column.index === 5) {
             hookData.cell.styles.textColor = [185, 28, 28];
           }
         } else if (stateText.includes('faible') || stateText.includes('épuisé')) {
           hookData.cell.styles.fillColor = [255, 251, 235];
-          if (hookData.column.index === 6) {
+          if (hookData.column.index === 5) {
             hookData.cell.styles.textColor = [180, 83, 9];
           }
         }
@@ -1097,7 +1094,7 @@ export const generatePoloSupplierOrderPDF = (
   y = (doc as any).lastAutoTable.finalY + 10;
 
   // Urgent Order Box if any items need ordering
-  const urgentItems = tableRows.filter((r) => r[7] !== '0');
+  const urgentItems = tableRows.filter((r) => r[6] !== '0');
   if (urgentItems.length > 0) {
     if (y + 35 > doc.internal.pageSize.getHeight() - 15) {
       doc.addPage();
@@ -1115,8 +1112,8 @@ export const generatePoloSupplierOrderPDF = (
 
     autoTable(doc, {
       startY: y,
-      head: [['Couleur & Année', 'Taille Précise', 'En Attente', 'Stock Dispo', 'Nombre Exact à Commander']],
-      body: urgentItems.map((r) => [r[0], r[1], r[5], r[4], r[7]]),
+      head: [['Couleur & Année', 'Taille Précise', 'Stock Dispo', 'Quantité à Commander']],
+      body: urgentItems.map((r) => [r[0], r[1], r[4], r[6]]),
       theme: 'grid',
       headStyles: {
         fillColor: [185, 28, 28],
@@ -1129,11 +1126,10 @@ export const generatePoloSupplierOrderPDF = (
         cellPadding: 2.5,
       },
       columnStyles: {
-        0: { cellWidth: 58, fontStyle: 'bold' },
-        1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
-        2: { cellWidth: 28, halign: 'center' },
-        3: { cellWidth: 28, halign: 'center' },
-        4: { cellWidth: 43, halign: 'right', fontStyle: 'bold' },
+        0: { cellWidth: 70, fontStyle: 'bold' },
+        1: { cellWidth: 30, halign: 'center', fontStyle: 'bold' },
+        2: { cellWidth: 35, halign: 'center' },
+        3: { cellWidth: 47, halign: 'right', fontStyle: 'bold' },
       },
     });
   }
@@ -1193,7 +1189,7 @@ export const generatePoloStudentsListPDF = (
         ? `Acompte (${formatDotCurrency(o.amountPaid)})`
         : 'Non payé';
     const rem = Math.max(0, (o.totalPrice || 0) - (o.amountPaid || 0));
-    const delivLabel = o.deliveryStatus === 'DELIVERED' ? 'Polo remis' : 'En attente de stock';
+    const delivLabel = o.deliveryStatus === 'DELIVERED' ? 'Polo remis' : 'À commander';
 
     return [
       String(idx + 1),

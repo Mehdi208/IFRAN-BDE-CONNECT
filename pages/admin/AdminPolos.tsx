@@ -96,6 +96,50 @@ const formatCurrencyDots = (val: number): string => {
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.')} FCFA`;
 };
 
+// High-contrast custom tooltip for Payment Donut Chart
+const PaymentDonutTooltip = ({ active, payload, totalStudents }: any) => {
+  if (active && payload && payload.length) {
+    const item = payload[0];
+    const color = item.payload?.color || '#3b82f6';
+    const name = item.name || '';
+    const value = item.value || 0;
+    const pct = totalStudents > 0 ? Math.round((Number(value) / totalStudents) * 100) : 0;
+    return (
+      <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-700 shadow-2xl text-xs space-y-1 pointer-events-none">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+          <span className="font-bold text-slate-100">{name}</span>
+        </div>
+        <div className="font-mono text-emerald-400 font-extrabold text-sm">
+          {value} étudiant(s) <span className="text-slate-400 text-xs font-normal">({pct}%)</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+// High-contrast custom tooltip for Stock Bar Chart
+const StockBarChartTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-700 shadow-2xl text-xs space-y-1.5 pointer-events-none">
+        <div className="font-bold text-slate-200 border-b border-slate-800 pb-1">{label}</div>
+        {payload.map((entry: any, i: number) => (
+          <div key={`entry-${i}`} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+              <span className="text-slate-300">{entry.name} :</span>
+            </div>
+            <span className="font-mono font-bold text-white">{entry.value} polo(s)</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 const AdminPolos: React.FC = () => {
   const [orders, setOrders] = useState<StudentPoloOrder[]>([]);
   const [inventory, setInventory] = useState<PoloInventoryConfig>(
@@ -158,7 +202,7 @@ const AdminPolos: React.FC = () => {
     };
   }, []);
 
-  // Stock Matrix Calculations per Color x Size
+  // Stock Matrix Calculations per Color x Size (Unified: demands at 0 physical stock become "To Order")
   const stockMatrix = useMemo(() => {
     const result: Record<
       PoloColorYear,
@@ -168,8 +212,6 @@ const AdminPolos: React.FC = () => {
           initialStock: number;
           delivered: number;
           available: number;
-          pending: number;
-          deficit: number;
           toOrder: number;
           status: 'OK' | 'LOW' | 'EMPTY' | 'SHORTAGE';
         }
@@ -184,7 +226,7 @@ const AdminPolos: React.FC = () => {
       POLO_SIZES.forEach((sz) => {
         const initialStock = inventory.stock?.[colorKey]?.[sz] ?? 0;
         let delivered = 0;
-        let pending = 0;
+        let toOrderCount = 0;
 
         orders.forEach((o) => {
           if (o.items && o.items.length > 0) {
@@ -192,18 +234,18 @@ const AdminPolos: React.FC = () => {
               if (it.color === colorKey && it.size === sz) {
                 const q = it.quantity || 1;
                 if (o.deliveryStatus === 'DELIVERED') delivered += q;
-                else pending += q;
+                else toOrderCount += q;
               }
             });
           } else if (o.poloType === colorKey && o.size === sz) {
             const q = o.quantity || 1;
             if (o.deliveryStatus === 'DELIVERED') delivered += q;
-            else pending += q;
+            else toOrderCount += q;
           }
         });
 
         const available = Math.max(0, initialStock - delivered);
-        const totalDemand = delivered + pending;
+        const totalDemand = delivered + toOrderCount;
         const deficit = Math.max(0, totalDemand - initialStock);
         const toOrder = deficit;
 
@@ -220,8 +262,6 @@ const AdminPolos: React.FC = () => {
           initialStock,
           delivered,
           available,
-          pending,
-          deficit,
           toOrder,
           status,
         };
@@ -236,8 +276,6 @@ const AdminPolos: React.FC = () => {
     let totalInitial = 0;
     let totalDelivered = 0;
     let totalAvailable = 0;
-    let totalPending = 0;
-    let totalDeficit = 0;
     let totalToOrder = 0;
     let outOfStockVariants = 0;
     const itemsToOrderList: {
@@ -245,8 +283,6 @@ const AdminPolos: React.FC = () => {
       colorLabel: string;
       size: PoloSize;
       available: number;
-      pending: number;
-      deficit: number;
       toOrder: number;
     }[] = [];
 
@@ -256,10 +292,8 @@ const AdminPolos: React.FC = () => {
         totalInitial += cell.initialStock;
         totalDelivered += cell.delivered;
         totalAvailable += cell.available;
-        totalPending += cell.pending;
-        totalDeficit += cell.deficit;
         totalToOrder += cell.toOrder;
-        if (cell.available === 0 || cell.deficit > 0) {
+        if (cell.available === 0 || cell.toOrder > 0) {
           outOfStockVariants += 1;
         }
         if (cell.toOrder > 0) {
@@ -268,8 +302,6 @@ const AdminPolos: React.FC = () => {
             colorLabel,
             size: sz,
             available: cell.available,
-            pending: cell.pending,
-            deficit: cell.deficit,
             toOrder: cell.toOrder,
           });
         }
@@ -289,8 +321,6 @@ const AdminPolos: React.FC = () => {
       totalInitial,
       totalDelivered,
       totalAvailable,
-      totalPending,
-      totalDeficit,
       totalToOrder,
       outOfStockVariants,
       itemsToOrderList,
@@ -384,24 +414,22 @@ const AdminPolos: React.FC = () => {
     }
   };
 
-  // Recharts Data 1: Stacked Bar Chart of Stock Distribution by Year
+  // Recharts Data 1: Stacked Bar Chart (Remis, Disponible, À commander)
   const stockChartData = useMemo(() => {
     return POLO_COLORS.map((colorCfg) => {
       const cells = stockMatrix[colorCfg.key];
       const delivered = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].delivered, 0);
       const available = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].available, 0);
-      const pending = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].pending, 0);
-      const initial = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].initialStock, 0);
       const toOrder = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].toOrder, 0);
+      const initial = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].initialStock, 0);
 
       return {
         name: `${colorCfg.shortLabel} (${colorCfg.yearLabel})`,
         shortName: colorCfg.yearLabel,
         Remis: delivered,
         Disponible: available,
-        'En attente': pending,
+        'À commander': toOrder,
         initial,
-        toOrder,
       };
     });
   }, [stockMatrix]);
@@ -728,7 +756,7 @@ const AdminPolos: React.FC = () => {
           ? 'Acompte'
           : 'Non payé';
       const delivText =
-        o.deliveryStatus === 'DELIVERED' ? 'Polo remis' : 'En attente de stock';
+        o.deliveryStatus === 'DELIVERED' ? 'Polo remis' : 'À commander';
       const remaining = Math.max(0, (o.totalPrice || 0) - (o.amountPaid || 0));
 
       return [
@@ -837,8 +865,8 @@ const AdminPolos: React.FC = () => {
                 {globalStats.totalDelivered} remis
               </span>
               <span>·</span>
-              <span className="text-amber-600 dark:text-amber-400 font-semibold">
-                {globalStats.totalPending} en attente
+              <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                {globalStats.totalToOrder} à commander
               </span>
             </div>
           </div>
@@ -932,7 +960,7 @@ const AdminPolos: React.FC = () => {
                   <span>Répartition des Stocks & Demandes par Année</span>
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Comparaison temps réel entre Polos remis, Stock disponible et Demandes en attente.
+                  Comparaison temps réel : Polos remis, Stock physique disponible et Polos à commander.
                 </p>
               </div>
               <span className="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
@@ -964,17 +992,7 @@ const AdminPolos: React.FC = () => {
                     tickLine={false}
                     allowDecimals={false}
                   />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
-                    contentStyle={{
-                      backgroundColor: '#0f172a',
-                      borderColor: '#1e293b',
-                      borderRadius: '0.75rem',
-                      color: '#f8fafc',
-                      fontSize: '12px',
-                    }}
-                    formatter={(value: any, name: any) => [`${value} polo(s)`, name]}
-                  />
+                  <Tooltip content={<StockBarChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
                   <Bar
                     dataKey="Remis"
@@ -990,9 +1008,9 @@ const AdminPolos: React.FC = () => {
                     barSize={42}
                   />
                   <Bar
-                    dataKey="En attente"
+                    dataKey="À commander"
                     stackId="poloStack"
-                    fill="#f59e0b"
+                    fill="#f43f5e"
                     radius={[4, 4, 0, 0]}
                     barSize={42}
                   />
@@ -1038,17 +1056,9 @@ const AdminPolos: React.FC = () => {
                     </Pie>
                     {paymentChartData.hasData && (
                       <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#0f172a',
-                          borderColor: '#1e293b',
-                          borderRadius: '0.75rem',
-                          color: '#f8fafc',
-                          fontSize: '12px',
-                        }}
-                        formatter={(value: any, name: any) => [
-                          `${value} étudiant(s)`,
-                          name,
-                        ]}
+                        content={
+                          <PaymentDonutTooltip totalStudents={paymentChartData.totalStudents} />
+                        }
                       />
                     )}
                   </PieChart>
@@ -1114,7 +1124,7 @@ const AdminPolos: React.FC = () => {
               01. État du Stock par Couleur (Année) et Taille (S à 3XL)
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Ajustez le stock approvisionné avec les boutons <code className="font-mono">-</code> / <code className="font-mono">+</code> ou via « Configurer le Stock ». Les polos à commander se calculent automatiquement à partir des demandes étudiantes en attente.
+              Ajustez le stock approvisionné avec les boutons <code className="font-mono">-</code> / <code className="font-mono">+</code> ou via « Configurer le Stock ». Les polos à commander se calculent automatiquement à partir des demandes étudiantes.
             </p>
           </div>
 
@@ -1139,15 +1149,15 @@ const AdminPolos: React.FC = () => {
                   key={colorCfg.key}
                   className="rounded-xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col"
                 >
-                  {/* Card Header */}
-                  <div className={`p-4 ${colorCfg.headerBgClass} flex items-center justify-between`}>
-                    <div className="flex items-center gap-3">
+                  {/* Card Header (stays strictly on 1 single line) */}
+                  <div className={`p-3.5 sm:p-4 ${colorCfg.headerBgClass} flex items-center justify-between gap-2`}>
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <span
-                        className={`w-5 h-5 rounded-md shrink-0 ${colorCfg.swatchClass}`}
+                        className={`w-4 h-4 rounded shrink-0 ${colorCfg.swatchClass}`}
                         aria-hidden="true"
                       />
-                      <div>
-                        <h3 className={`text-sm font-extrabold ${colorCfg.badgeTextClass}`}>
+                      <div className="min-w-0">
+                        <h3 className={`text-xs sm:text-sm font-extrabold truncate ${colorCfg.badgeTextClass}`}>
                           {colorCfg.label}
                         </h3>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono tabular-nums">
@@ -1156,22 +1166,24 @@ const AdminPolos: React.FC = () => {
                       </div>
                     </div>
 
-                    {totalColorToOrder > 0 ? (
-                      <span className="text-xs font-bold text-rose-600 dark:text-rose-400 font-mono tabular-nums">
-                        À commander : {totalColorToOrder}
-                      </span>
-                    ) : totalColorAvailable === 0 ? (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300">
-                        Épuisé
-                      </span>
-                    ) : (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300">
-                        Stock OK
-                      </span>
-                    )}
+                    <div className="shrink-0 text-right">
+                      {totalColorToOrder > 0 ? (
+                        <span className="text-xs font-bold text-rose-600 dark:text-rose-400 font-mono tabular-nums whitespace-nowrap shrink-0">
+                          À commander : {totalColorToOrder}
+                        </span>
+                      ) : totalColorAvailable === 0 ? (
+                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 whitespace-nowrap shrink-0">
+                          Épuisé
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 whitespace-nowrap shrink-0">
+                          En stock
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Sizes Table */}
+                  {/* Sizes Table (Clean 5 columns without redundant 'Attente' column) */}
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
@@ -1180,8 +1192,7 @@ const AdminPolos: React.FC = () => {
                           <th className="py-2.5 px-2 font-semibold text-center">Appro.</th>
                           <th className="py-2.5 px-2 font-semibold text-center">Remis</th>
                           <th className="py-2.5 px-2 font-semibold text-center">Dispo</th>
-                          <th className="py-2.5 px-2 font-semibold text-center">Attente</th>
-                          <th className="py-2.5 px-3 font-semibold text-right">À Commander</th>
+                          <th className="py-2.5 px-3 font-semibold text-right whitespace-nowrap">À Commander</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200/70 dark:divide-slate-800/70 font-mono tabular-nums">
@@ -1251,17 +1262,7 @@ const AdminPolos: React.FC = () => {
                                 {cell.available}
                               </td>
 
-                              <td
-                                className={`py-2.5 px-2 text-center ${
-                                  cell.pending > 0
-                                    ? 'font-bold text-amber-600 dark:text-amber-400'
-                                    : 'text-slate-400'
-                                }`}
-                              >
-                                {cell.pending}
-                              </td>
-
-                              <td className="py-2.5 px-3 text-right">
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
                                 {cell.toOrder > 0 ? (
                                   <span className="font-extrabold text-rose-600 dark:text-rose-400">
                                     +{cell.toOrder} à cmd
@@ -1295,7 +1296,7 @@ const AdminPolos: React.FC = () => {
                 </span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Liste précise du nombre de polos à commander par couleur et par taille pour satisfaire toutes les demandes étudiantes en attente.
+                Liste précise du nombre de polos à commander par couleur et par taille pour satisfaire toutes les demandes étudiantes.
               </p>
             </div>
 
@@ -1341,15 +1342,12 @@ const AdminPolos: React.FC = () => {
                       {item.colorLabel}
                     </div>
                     <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 font-mono tabular-nums">
-                      Taille <strong>{item.size}</strong> · Dispo: {item.available} · En attente: {item.pending}
+                      Taille <strong>{item.size}</strong> · Stock dispo : {item.available}
                     </div>
                   </div>
                   <div className="text-right font-mono tabular-nums shrink-0">
-                    <div className="text-sm font-extrabold text-rose-600 dark:text-rose-400">
+                    <div className="text-sm font-extrabold text-rose-600 dark:text-rose-400 whitespace-nowrap">
                       {item.toOrder} à commander
-                    </div>
-                    <div className="text-[11px] text-slate-500">
-                      Demande non couverte : {item.deficit}
                     </div>
                   </div>
                 </div>
@@ -1447,7 +1445,7 @@ const AdminPolos: React.FC = () => {
             >
               <option value="ALL">Tous les Statuts de Remise</option>
               <option value="DELIVERED">Polo déjà remis ({globalStats.totalDelivered})</option>
-              <option value="PENDING_STOCK">En attente de stock ({globalStats.totalPending})</option>
+              <option value="PENDING_STOCK">À commander ({globalStats.totalToOrder})</option>
             </select>
           </div>
 
@@ -1598,7 +1596,7 @@ const AdminPolos: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleToggleDelivered(order)}
-                              title="Cliquer pour basculer Polo remis / En attente de stock"
+                              title="Cliquer pour basculer Polo remis / À commander"
                               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
                                 order.deliveryStatus === 'DELIVERED'
                                   ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700'
@@ -1613,7 +1611,7 @@ const AdminPolos: React.FC = () => {
                               ) : (
                                 <>
                                   <Clock size={13} />
-                                  <span>En attente de stock</span>
+                                  <span>À commander</span>
                                 </>
                               )}
                             </button>
@@ -1670,30 +1668,33 @@ const AdminPolos: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal 1: Add / Edit Student Polo Order (Multi-Polos & Multi-Tailles) */}
+      {/* Modal 1: Add / Edit Student Polo Order (Multi-Polos & Multi-Tailles) - Fully Responsive max-h-[92vh] */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 my-8">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
-              <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <Shirt size={20} className="text-bde-rose" />
-                <span>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Sticky Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-[#131b2e] z-10">
+              <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <Shirt size={20} className="text-bde-rose shrink-0" />
+                <span className="truncate">
                   {editingOrder
                     ? "Modifier la commande de Polo"
-                    : 'Enregistrer la commande de Polo d’un étudiant'}
+                    : 'Enregistrer la commande de Polo'}
                 </span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                title="Fermer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveStudentOrder} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Scrollable Form Body */}
+            <form id="student-polo-form" onSubmit={handleSaveStudentOrder} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Nom de l'étudiant *
@@ -1704,7 +1705,7 @@ const AdminPolos: React.FC = () => {
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Ex: KOUASSI"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-bde-rose"
                   />
                 </div>
 
@@ -1718,12 +1719,12 @@ const AdminPolos: React.FC = () => {
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="Ex: Jean-Marc"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:border-bde-rose"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Classe / Filière *
@@ -1755,7 +1756,7 @@ const AdminPolos: React.FC = () => {
                     required
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:border-bde-rose"
                   />
                 </div>
               </div>
@@ -1765,7 +1766,7 @@ const AdminPolos: React.FC = () => {
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Couleur du Polo & Année *
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {POLO_COLORS.map((c) => {
                     const isSelected = poloType === c.key;
                     return (
@@ -1773,18 +1774,18 @@ const AdminPolos: React.FC = () => {
                         key={c.key}
                         type="button"
                         onClick={() => handlePoloTypeChange(c.key)}
-                        className={`p-3 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
+                        className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2 ${
                           isSelected
-                            ? 'border-bde-rose bg-rose-50/60 dark:bg-rose-950/40 font-bold text-slate-900 dark:text-white'
+                            ? 'border-bde-rose bg-rose-50/60 dark:bg-rose-950/40 font-bold text-slate-900 dark:text-white ring-1 ring-bde-rose'
                             : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-300'
                         }`}
                       >
                         <span
-                          className={`w-4 h-4 rounded shrink-0 ${c.swatchClass}`}
+                          className={`w-3.5 h-3.5 rounded shrink-0 ${c.swatchClass}`}
                         />
-                        <div className="leading-tight">
-                          <div className="text-xs font-bold">{c.shortLabel}</div>
-                          <div className="text-[10px] text-slate-500">
+                        <div className="leading-tight min-w-0">
+                          <div className="text-xs font-bold truncate">{c.shortLabel}</div>
+                          <div className="text-[10px] text-slate-500 truncate">
                             {c.yearLabel}
                           </div>
                         </div>
@@ -1796,19 +1797,16 @@ const AdminPolos: React.FC = () => {
 
               {/* Multi-Size Selection with Quantity Steppers */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <label className="font-semibold text-slate-700 dark:text-slate-300">
                     Tailles et Quantités souhaitées *
                   </label>
                   <span className="font-mono text-xs font-bold text-bde-rose">
-                    Total : {totalModalPolos} polo(s) sélectionné(s)
+                    Total : {totalModalPolos} polo(s)
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
-                  L'étudiant peut choisir plusieurs polos de plusieurs tailles (S à 3XL).
-                </p>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {POLO_SIZES.map((sz) => {
                     const count = selectedQuantities[sz] || 0;
                     const avail = stockMatrix[poloType]?.[sz]?.available ?? 0;
@@ -1817,14 +1815,14 @@ const AdminPolos: React.FC = () => {
                     return (
                       <div
                         key={sz}
-                        className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${
+                        className={`p-2 rounded-xl border transition-all flex flex-col justify-between ${
                           count > 0
                             ? 'border-bde-rose bg-rose-50/30 dark:bg-rose-950/20'
                             : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-mono font-extrabold text-sm text-slate-900 dark:text-white">
+                          <span className="font-mono font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
                             Taille {sz}
                           </span>
                           <span
@@ -1838,33 +1836,33 @@ const AdminPolos: React.FC = () => {
                           </span>
                         </div>
 
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                          <span className="text-[11px] text-slate-500">Qté :</span>
+                        <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
+                          <span className="text-[10px] text-slate-500">Qté :</span>
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => handleAdjustQuantity(sz, -1)}
                               disabled={count <= 0}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30"
+                              className="w-5 h-5 flex items-center justify-center rounded-md border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30"
                             >
-                              <Minus size={12} />
+                              <Minus size={11} />
                             </button>
-                            <span className="w-6 text-center font-mono font-bold text-xs text-slate-900 dark:text-white">
+                            <span className="w-5 text-center font-mono font-bold text-xs text-slate-900 dark:text-white">
                               {count}
                             </span>
                             <button
                               type="button"
                               onClick={() => handleAdjustQuantity(sz, 1)}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-bde-rose text-white hover:bg-rose-700 transition-colors"
+                              className="w-5 h-5 flex items-center justify-center rounded-md bg-bde-rose text-white hover:bg-rose-700 transition-colors"
                             >
-                              <Plus size={12} />
+                              <Plus size={11} />
                             </button>
                           </div>
                         </div>
 
                         {isShortage && (
-                          <div className="mt-1.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400">
-                            Rupture physique ({avail} dispo pour {count} demandés)
+                          <div className="mt-1 text-[9px] font-semibold text-rose-600 dark:text-rose-400">
+                            À commander ({count - avail} manquant{count - avail > 1 ? 's' : ''})
                           </div>
                         )}
                       </div>
@@ -1875,19 +1873,19 @@ const AdminPolos: React.FC = () => {
 
               {/* Alerte contextuelle si rupture de stock physique */}
               {hasShortfallInSelection && (
-                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
-                  <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-                  <div className="leading-relaxed">
-                    <span className="font-bold">Rupture de stock physique sur les tailles demandées.</span>
+                <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2">
+                  <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="leading-tight">
+                    <span className="font-bold">Rupture de stock physique sur les tailles sélectionnées.</span>
                     <p className="text-[11px] mt-0.5 opacity-90">
-                      Les polos manquants s'ajouteront automatiquement dans <strong>« Polos à commander »</strong> pour la commande fournisseur.
+                      Les quantités manquantes s'ajouteront automatiquement dans <strong>« Polos à commander »</strong> pour la commande fournisseur.
                     </p>
                   </div>
                 </div>
               )}
 
               {/* Payment Status & Amounts */}
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2.5">
                 <label className="block font-semibold text-slate-700 dark:text-slate-300">
                   Statut du Paiement *
                 </label>
@@ -1895,7 +1893,7 @@ const AdminPolos: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handlePaymentStatusChange('PAID')}
-                    className={`py-2 px-3 rounded-lg font-semibold border transition-colors ${
+                    className={`py-1.5 px-2.5 rounded-lg font-semibold border transition-colors text-xs ${
                       paymentStatus === 'PAID'
                         ? 'bg-emerald-600 text-white border-emerald-600'
                         : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -1906,7 +1904,7 @@ const AdminPolos: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handlePaymentStatusChange('PARTIAL')}
-                    className={`py-2 px-3 rounded-lg font-semibold border transition-colors ${
+                    className={`py-1.5 px-2.5 rounded-lg font-semibold border transition-colors text-xs ${
                       paymentStatus === 'PARTIAL'
                         ? 'bg-amber-600 text-white border-amber-600'
                         : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -1917,7 +1915,7 @@ const AdminPolos: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handlePaymentStatusChange('UNPAID')}
-                    className={`py-2 px-3 rounded-lg font-semibold border transition-colors ${
+                    className={`py-1.5 px-2.5 rounded-lg font-semibold border transition-colors text-xs ${
                       paymentStatus === 'UNPAID'
                         ? 'bg-rose-600 text-white border-rose-600'
                         : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -1930,7 +1928,7 @@ const AdminPolos: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <div>
                     <label className="block text-[11px] text-slate-500 mb-1">
-                      Montant payé par l'étudiant (FCFA)
+                      Montant payé (FCFA)
                     </label>
                     <input
                       type="number"
@@ -1939,7 +1937,7 @@ const AdminPolos: React.FC = () => {
                       value={amountPaid}
                       onChange={(e) => setAmountPaid(Number(e.target.value))}
                       disabled={paymentStatus !== 'PARTIAL'}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono disabled:opacity-60"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono disabled:opacity-60 text-xs"
                     />
                   </div>
                   <div>
@@ -1956,7 +1954,7 @@ const AdminPolos: React.FC = () => {
                         setTotalPrice(val);
                         if (paymentStatus === 'PAID') setAmountPaid(val);
                       }}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
                     />
                   </div>
                 </div>
@@ -1967,31 +1965,31 @@ const AdminPolos: React.FC = () => {
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Remise physique du Polo *
                 </label>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setDeliveryStatus('DELIVERED')}
-                    className={`py-2.5 px-3 rounded-xl font-semibold border transition-colors flex items-center justify-center gap-2 ${
+                    className={`py-2 px-3 rounded-xl font-semibold border transition-colors flex items-center justify-center gap-1.5 text-xs ${
                       deliveryStatus === 'DELIVERED'
                         ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white'
                         : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    <CheckCircle2 size={15} />
-                    <span>Polos déjà remis à l'étudiant</span>
+                    <CheckCircle2 size={14} />
+                    <span>Polos déjà remis</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setDeliveryStatus('PENDING_STOCK')}
-                    className={`py-2.5 px-3 rounded-xl font-semibold border transition-colors flex items-center justify-center gap-2 ${
+                    className={`py-2 px-3 rounded-xl font-semibold border transition-colors flex items-center justify-center gap-1.5 text-xs ${
                       deliveryStatus === 'PENDING_STOCK'
                         ? 'bg-amber-600 text-white border-amber-600'
                         : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    <Clock size={15} />
-                    <span>En attente de stock (À commander)</span>
+                    <Clock size={14} />
+                    <span>À commander</span>
                   </button>
                 </div>
               </div>
@@ -2005,53 +2003,58 @@ const AdminPolos: React.FC = () => {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Ex: Paiement Mobile Money Wave, demande spécifique..."
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white text-xs"
                 />
               </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-bde-rose text-white font-bold hover:bg-rose-700 transition-colors"
-                >
-                  {editingOrder ? 'Enregistrer les modifications' : 'Ajouter au registre'}
-                </button>
-              </div>
             </form>
+
+            {/* Sticky Footer */}
+            <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5 shrink-0 bg-slate-50/90 dark:bg-slate-900/90 z-10">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                form="student-polo-form"
+                className="px-5 py-2 rounded-xl bg-bde-rose text-white font-bold text-xs hover:bg-rose-700 transition-colors shadow-sm"
+              >
+                {editingOrder ? 'Enregistrer les modifications' : 'Ajouter au registre'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Modal 2: Configure Full Initial Stock & Parameters */}
+      {/* Modal 2: Configure Full Initial Stock & Parameters - Fully Responsive max-h-[92vh] */}
       {isStockModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-5 my-8">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Sticky Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-[#131b2e] z-10">
               <div>
-                <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
                   Configuration du Stock Approvisionné & Paramètres Polos
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Saisissez le nombre de polos approvisionnés par couleur et par taille. Pour mettre le stock à zéro, saisissez 0 dans chaque champ.
+                  Saisissez le nombre de polos approvisionnés par couleur et taille. Pour mettre à zéro, saisissez 0 dans chaque champ.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsStockModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                title="Fermer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveStockModal} className="space-y-5 text-xs">
+            {/* Scrollable Body */}
+            <form id="stock-modal-form" onSubmit={handleSaveStockModal} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -2133,23 +2136,25 @@ const AdminPolos: React.FC = () => {
                   </div>
                 ))}
               </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsStockModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-bde-rose text-white font-bold hover:bg-rose-700 transition-colors"
-                >
-                  Sauvegarder le Stock en Temps Réel
-                </button>
-              </div>
             </form>
+
+            {/* Sticky Footer */}
+            <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5 shrink-0 bg-slate-50/90 dark:bg-slate-900/90 z-10">
+              <button
+                type="button"
+                onClick={() => setIsStockModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                form="stock-modal-form"
+                className="px-5 py-2 rounded-xl bg-bde-rose text-white font-bold text-xs hover:bg-rose-700 transition-colors shadow-sm"
+              >
+                Sauvegarder le Stock en Temps Réel
+              </button>
+            </div>
           </div>
         </div>
       )}
