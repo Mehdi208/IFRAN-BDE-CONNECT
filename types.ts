@@ -242,6 +242,12 @@ export type IfranClass = typeof IFRAN_CLASSES[number];
 export type PoloColorYear = 'BLANC_1A' | 'ROUGE_2A' | 'BLEU_3A';
 export type PoloSize = 'S' | 'M' | 'L' | 'XL' | 'XXL' | '3XL';
 
+export interface PoloItemChoice {
+  color: PoloColorYear;
+  size: PoloSize;
+  quantity: number;
+}
+
 export interface StudentPoloOrder {
   id: string;
   lastName: string;
@@ -249,6 +255,8 @@ export interface StudentPoloOrder {
   studentClass: string;
   poloType: PoloColorYear;
   size: PoloSize;
+  quantity?: number;
+  items?: PoloItemChoice[];
   date: string;
   paymentStatus: 'PAID' | 'PARTIAL' | 'UNPAID';
   amountPaid: number;

@@ -976,19 +976,29 @@ export const generatePoloSupplierOrderPDF = (
   (['BLANC_1A', 'ROUGE_2A', 'BLEU_3A'] as PoloColorYear[]).forEach((colorKey) => {
     POLO_SIZES_PDF.forEach((size) => {
       const initialStock = inventory.stock?.[colorKey]?.[size] || 0;
-      const deliveredCount = orders.filter(
-        (o) => o.poloType === colorKey && o.size === size && o.deliveryStatus === 'DELIVERED'
-      ).length;
-      const pendingCount = orders.filter(
-        (o) => o.poloType === colorKey && o.size === size && o.deliveryStatus === 'PENDING_STOCK'
-      ).length;
+      let deliveredCount = 0;
+      let pendingCount = 0;
+      orders.forEach((o) => {
+        if (o.items && Array.isArray(o.items) && o.items.length > 0) {
+          o.items.forEach((it) => {
+            if (it.color === colorKey && it.size === size) {
+              if (o.deliveryStatus === 'DELIVERED') deliveredCount += Number(it.quantity) || 1;
+              else pendingCount += Number(it.quantity) || 1;
+            }
+          });
+        } else {
+          if (o.poloType === colorKey && o.size === size) {
+            const q = Number(o.quantity) || 1;
+            if (o.deliveryStatus === 'DELIVERED') deliveredCount += q;
+            else pendingCount += q;
+          }
+        }
+      });
 
       const availableStock = Math.max(0, initialStock - deliveredCount);
       const totalRequested = deliveredCount + pendingCount;
       const rawDeficit = Math.max(0, totalRequested - initialStock);
-      const toOrder = rawDeficit > 0
-        ? rawDeficit + safetyBufferPerSize
-        : (availableStock === 0 && safetyBufferPerSize > 0 ? safetyBufferPerSize : 0);
+      const toOrder = rawDeficit;
 
       totalStockAvailable += availableStock;
       totalDelivered += deliveredCount;
@@ -997,9 +1007,9 @@ export const generatePoloSupplierOrderPDF = (
 
       let statusLabel = 'En stock';
       if (rawDeficit > 0) {
-        statusLabel = `RUPTURE (-${rawDeficit})`;
+        statusLabel = `À commander (${rawDeficit})`;
       } else if (availableStock === 0) {
-        statusLabel = 'Stock épuisé (0)';
+        statusLabel = 'Épuisé (0 en stock)';
       } else if (availableStock <= (inventory.lowStockThreshold || 3)) {
         statusLabel = 'Stock faible';
       }
@@ -1012,7 +1022,7 @@ export const generatePoloSupplierOrderPDF = (
         String(availableStock),
         String(pendingCount),
         statusLabel,
-        toOrder > 0 ? `${toOrder} à commander` : '0',
+        toOrder > 0 ? String(toOrder) : '0',
       ]);
     });
   });
@@ -1191,7 +1201,9 @@ export const generatePoloStudentsListPDF = (
       o.firstName,
       o.studentClass,
       POLO_LABELS_PDF[o.poloType] || o.poloType,
-      o.size,
+      o.items && o.items.length > 0
+        ? o.items.map((it) => `${it.quantity}x${it.size}`).join(', ')
+        : o.size,
       o.date ? new Date(o.date).toLocaleDateString('fr-FR') : '-',
       payLabel,
       rem > 0 ? formatDotCurrency(rem) : '0 FCFA',

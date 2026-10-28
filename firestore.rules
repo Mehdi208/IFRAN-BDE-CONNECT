@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -101,6 +100,16 @@ service cloud.firestore {
     // 16. Campaign Templates
     match /campaign_templates/{templateId} {
       allow read, write: if isAdmin() || true; // Autorisé temporairement
+    }
+
+    // 17. Polos Orders
+    match /polo_orders/{orderId} {
+      allow read, write: if true;
+    }
+
+    // 18. Polos Inventory
+    match /polo_inventory/{inventoryId} {
+      allow read, write: if true;
     }
 
     // --- RÈGLE GLOBALE DE SÉCURITÉ ---
