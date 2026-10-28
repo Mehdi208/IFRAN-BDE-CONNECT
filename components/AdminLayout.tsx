@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -11,28 +10,32 @@ import {
   UserCheck,
   Menu,
   X,
-  GraduationCap,
   Sparkles,
   UtensilsCrossed,
   Image as ImageIcon,
-  Send,
   Sun,
   Moon,
   Award,
-  Shirt
+  Shirt,
+  Download,
+  Share,
 } from 'lucide-react';
 import { auth } from '../firebaseConfig';
 import { signOut } from 'firebase/auth';
+import { isPwaInstalled, installPwa } from '../services/pwaService';
 
 const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [logoError, setLogoError] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isInstalled, setIsInstalled] = useState<boolean>(() => isPwaInstalled());
+  const [showIosGuide, setShowIosGuide] = useState(false);
+  const [showManualGuide, setShowManualGuide] = useState(false);
   
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('adminDarkMode');
-    return saved !== null ? saved === 'true' : true; // default to dark mode for sleek admin UI
+    return saved !== null ? saved === 'true' : true;
   });
 
   useEffect(() => {
@@ -44,18 +47,46 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [isDarkMode]);
 
+  // Synchronize PWA installation state
+  useEffect(() => {
+    const checkStatus = () => {
+      setIsInstalled(isPwaInstalled());
+    };
+    checkStatus();
+    window.addEventListener('pwa-installed', checkStatus);
+    window.addEventListener('pwa-prompt-ready', checkStatus);
+    window.addEventListener('appinstalled', checkStatus);
+
+    return () => {
+      window.removeEventListener('pwa-installed', checkStatus);
+      window.removeEventListener('pwa-prompt-ready', checkStatus);
+      window.removeEventListener('appinstalled', checkStatus);
+    };
+  }, []);
+
   const toggleDarkMode = () => {
     setIsDarkMode(prev => !prev);
   };
 
   const handleLogout = async () => {
     try {
-        if (auth) await signOut(auth);
+      if (auth) await signOut(auth);
     } catch (e) {
-        console.warn("Erreur déconnexion Firebase:", e);
+      console.warn("Erreur déconnexion Firebase:", e);
     }
     localStorage.removeItem('isAuthenticated');
     navigate('/login');
+  };
+
+  const handleInstallApp = async () => {
+    const result = await installPwa();
+    if (result === 'accepted') {
+      setIsInstalled(true);
+    } else if (result === 'ios') {
+      setShowIosGuide(true);
+    } else if (result === 'manual') {
+      setShowManualGuide(true);
+    }
   };
 
   const navItems = [
@@ -114,6 +145,24 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </nav>
 
       <div className="p-4 border-t border-white/10 dark:border-slate-800 space-y-2">
+        {/* Bouton permanent pour installer la PWA (disparaît une fois installée) */}
+        {!isInstalled && (
+          <button
+            type="button"
+            onClick={handleInstallApp}
+            className="flex items-center justify-between px-3.5 py-2.5 w-full text-left text-white bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 rounded-xl transition-all shadow-sm group active:scale-95"
+            title="Installer l'application BDE IFRAN sur cet appareil"
+          >
+            <div className="flex items-center gap-3">
+              <Download size={19} className="text-bde-rose group-hover:scale-110 transition-transform shrink-0" />
+              <span className="text-xs font-bold text-white">Installer l'application</span>
+            </div>
+            <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-bde-rose text-white shadow-sm shrink-0">
+              App
+            </span>
+          </button>
+        )}
+
         <button 
           onClick={toggleDarkMode} 
           className="flex items-center justify-between px-3.5 py-2.5 w-full text-left text-slate-300 hover:text-white hover:bg-white/10 dark:hover:bg-slate-800/60 rounded-xl transition-colors"
@@ -160,6 +209,16 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </button>
           <h2 className="font-extrabold text-inherit text-base">{currentPage?.label || 'Administration'}</h2>
           <div className="flex items-center gap-2">
+            {!isInstalled && (
+              <button 
+                onClick={handleInstallApp}
+                className="p-2 rounded-lg bg-rose-500/15 border border-rose-500/30 text-bde-rose hover:bg-rose-500/25 transition-colors"
+                title="Installer l'application BDE IFRAN"
+                aria-label="Installer l'application"
+              >
+                <Download size={20} />
+              </button>
+            )}
             <button 
               onClick={toggleDarkMode} 
               className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'text-amber-400 hover:bg-slate-800' : 'text-gray-600 hover:bg-gray-100'}`}
@@ -174,6 +233,66 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
         <div className="animate-fade-in">{children}</div>
       </main>
+
+      {/* Guide d'installation sur iPhone / Safari iOS */}
+      {showIosGuide && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 text-white rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 font-bold text-sm text-bde-rose">
+                <Share size={18} />
+                <span>Installer sur iPhone / iPad</span>
+              </div>
+              <button onClick={() => setShowIosGuide(false)} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Pour ajouter l'application BDE IFRAN directement sur votre écran d'accueil :
+            </p>
+            <ol className="list-decimal list-inside space-y-2 text-xs text-slate-200 bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+              <li>Appuyez sur le bouton <strong>Partager</strong> en bas de Safari (<Share size={13} className="inline text-blue-400" />).</li>
+              <li>Faites défiler et appuyez sur <strong>« Sur l'écran d'accueil »</strong> (icône ➕).</li>
+              <li>Appuyez sur <strong>Ajouter</strong> en haut à droite.</li>
+            </ol>
+            <button
+              onClick={() => setShowIosGuide(false)}
+              className="w-full py-2.5 rounded-xl bg-bde-rose text-white text-xs font-bold hover:bg-rose-700 transition-colors"
+            >
+              C'est compris !
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Guide d'installation sur Ordinateur / PC / Mac */}
+      {showManualGuide && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 text-white rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 font-bold text-sm text-bde-rose">
+                <Download size={18} />
+                <span>Installer sur votre Ordinateur</span>
+              </div>
+              <button onClick={() => setShowManualGuide(false)} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Pour installer l'application BDE IFRAN sur votre PC ou Mac :
+            </p>
+            <div className="text-xs text-slate-200 bg-slate-800/80 p-3 rounded-xl border border-slate-700 space-y-1.5 leading-relaxed">
+              Dans la barre d'adresse de votre navigateur (Chrome, Edge ou Brave), cliquez sur la petite icône <strong>« Installer BDE IFRAN »</strong> située tout à droite à côté de l'étoile des favoris.
+            </div>
+            <button
+              onClick={() => setShowManualGuide(false)}
+              className="w-full py-2.5 rounded-xl bg-bde-rose text-white text-xs font-bold hover:bg-rose-700 transition-colors"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
