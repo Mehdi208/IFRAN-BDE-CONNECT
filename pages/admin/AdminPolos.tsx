@@ -125,8 +125,8 @@ const AdminPolos: React.FC = () => {
   const [size, setSize] = useState<PoloSize>('M');
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'PARTIAL' | 'UNPAID'>('PAID');
-  const [amountPaid, setAmountPaid] = useState<number>(5000);
-  const [totalPrice, setTotalPrice] = useState<number>(5000);
+  const [amountPaid, setAmountPaid] = useState<number>(10000);
+  const [totalPrice, setTotalPrice] = useState<number>(10000);
   const [deliveryStatus, setDeliveryStatus] = useState<'DELIVERED' | 'PENDING_STOCK'>('DELIVERED');
   const [notes, setNotes] = useState('');
 
@@ -467,7 +467,7 @@ const AdminPolos: React.FC = () => {
     setPoloType('BLANC_1A');
     setSize('M');
     setDate(new Date().toISOString().split('T')[0]);
-    const defaultPrice = inventory.unitPrice || 5000;
+    const defaultPrice = inventory.unitPrice || 10000;
     setTotalPrice(defaultPrice);
     setPaymentStatus('PAID');
     setAmountPaid(defaultPrice);
@@ -488,7 +488,7 @@ const AdminPolos: React.FC = () => {
     setDate(order.date);
     setPaymentStatus(order.paymentStatus);
     setAmountPaid(order.amountPaid);
-    setTotalPrice(order.totalPrice || inventory.unitPrice || 5000);
+    setTotalPrice(order.totalPrice || inventory.unitPrice || 10000);
     setDeliveryStatus(order.deliveryStatus);
     setNotes(order.notes || '');
     setIsModalOpen(true);
@@ -527,7 +527,7 @@ const AdminPolos: React.FC = () => {
       date,
       paymentStatus,
       amountPaid: cleanAmountPaid,
-      totalPrice: Number(totalPrice) || 5000,
+      totalPrice: Number(totalPrice) || 10000,
       deliveryStatus,
       notes: notes.trim(),
     };
@@ -552,7 +552,7 @@ const AdminPolos: React.FC = () => {
   // Quick 1-click toggles in student table
   const handleTogglePaid = async (order: StudentPoloOrder) => {
     const nextStatus = order.paymentStatus === 'PAID' ? 'UNPAID' : 'PAID';
-    const nextAmount = nextStatus === 'PAID' ? order.totalPrice || 5000 : 0;
+    const nextAmount = nextStatus === 'PAID' ? order.totalPrice || 10000 : 0;
     await dataService.updatePoloOrder({
       ...order,
       paymentStatus: nextStatus,

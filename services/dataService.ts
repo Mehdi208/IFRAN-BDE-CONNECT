@@ -811,7 +811,7 @@ export const dataService = {
   // --- GESTION DES POLOS ÉTUDIANTS & STOCKS TEMPS RÉEL ---
     getDefaultPoloInventory: (): PoloInventoryConfig => ({
     id: 'main_inventory',
-    unitPrice: 5000,
+    unitPrice: 10000,
     lowStockThreshold: 3,
     stock: {
       BLANC_1A: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
@@ -824,7 +824,7 @@ export const dataService = {
   resetPoloInventoryToZero: async (): Promise<PoloInventoryConfig> => {
     const zeroInv: PoloInventoryConfig = {
       id: 'main_inventory',
-      unitPrice: 5000,
+      unitPrice: 10000,
       lowStockThreshold: 3,
       stock: {
         BLANC_1A: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
