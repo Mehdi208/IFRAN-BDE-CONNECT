@@ -30,7 +30,22 @@ import {
   Users,
   Check,
   ArrowUpDown,
+  BarChart3,
+  PieChart as PieChartIcon,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
 
 const POLO_COLORS: {
   key: PoloColorYear;
@@ -306,6 +321,72 @@ const AdminPolos: React.FC = () => {
       unpaidCount,
     };
   }, [stockMatrix, orders]);
+
+  // Recharts Data 1: Stacked Bar Chart of Stock Distribution by Year
+  const stockChartData = useMemo(() => {
+    return POLO_COLORS.map((colorCfg) => {
+      const cells = stockMatrix[colorCfg.key];
+      const delivered = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].delivered, 0);
+      const available = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].available, 0);
+      const pending = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].pending, 0);
+      const initial = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].initialStock, 0);
+      const toOrder = POLO_SIZES.reduce((acc, sz) => acc + cells[sz].toOrder, 0);
+
+      return {
+        name: `${colorCfg.shortLabel} (${colorCfg.yearLabel})`,
+        shortName: colorCfg.yearLabel,
+        Remis: delivered,
+        Disponible: available,
+        'En attente': pending,
+        initial,
+        toOrder,
+      };
+    });
+  }, [stockMatrix]);
+
+  // Recharts Data 2: Donut Chart of Global Student Payment Rate
+  const paymentChartData = useMemo(() => {
+    const totalStudents = orders.length;
+    const paidPct = totalStudents > 0 ? Math.round((globalStats.paidCount / totalStudents) * 100) : 0;
+    const totalExpectedMoney = globalStats.totalPaidMoney + globalStats.totalUnpaidMoney;
+    const moneyRatePct =
+      totalExpectedMoney > 0
+        ? Math.round((globalStats.totalPaidMoney / totalExpectedMoney) * 100)
+        : 0;
+
+    const segments = [
+      {
+        name: 'Payé',
+        value: globalStats.paidCount,
+        color: '#10b981',
+      },
+      {
+        name: 'Acompte versé',
+        value: globalStats.partialCount,
+        color: '#f59e0b',
+      },
+      {
+        name: 'Non payé',
+        value: globalStats.unpaidCount,
+        color: '#e11d48',
+      },
+    ];
+
+    const hasData = totalStudents > 0;
+    const displaySegments = hasData
+      ? segments.filter((s) => s.value > 0)
+      : [{ name: 'Aucun étudiant', value: 1, color: '#475569' }];
+
+    return {
+      hasData,
+      totalStudents,
+      paidPct,
+      moneyRatePct,
+      totalExpectedMoney,
+      segments,
+      displaySegments,
+    };
+  }, [orders.length, globalStats]);
 
   // Adjust single size stock directly (+1 / -1)
   const handleQuickAdjustStock = async (
@@ -717,6 +798,196 @@ const AdminPolos: React.FC = () => {
               <span className="font-semibold text-rose-600 dark:text-rose-400">
                 {formatCurrencyDots(globalStats.totalUnpaidMoney)}
               </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Visual Analytics Section (Recharts): Stock Distribution & Payment Rate */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Chart 1: Stacked Bar Chart - Stock Distribution by Year */}
+          <div className="p-5 rounded-xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <BarChart3 size={17} className="text-bde-rose shrink-0" />
+                  <span>Répartition des Stocks & Demandes par Année</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Comparaison temps réel entre Polos remis, Stock disponible et Demandes en attente.
+                </p>
+              </div>
+              <span className="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
+                Total appro. : {globalStats.totalInitial}
+              </span>
+            </div>
+
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={stockChartData}
+                  margin={{ top: 10, right: 16, left: -12, bottom: 5 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#334155"
+                    opacity={0.25}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }}
+                    axisLine={{ stroke: '#334155', opacity: 0.3 }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#94a3b8' }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderColor: '#1e293b',
+                      borderRadius: '0.75rem',
+                      color: '#f8fafc',
+                      fontSize: '12px',
+                    }}
+                    formatter={(value: any, name: any) => [`${value} polo(s)`, name]}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
+                  />
+                  <Bar
+                    dataKey="Remis"
+                    stackId="poloStack"
+                    fill="#10b981"
+                    radius={[0, 0, 4, 4]}
+                    barSize={42}
+                  />
+                  <Bar
+                    dataKey="Disponible"
+                    stackId="poloStack"
+                    fill="#3b82f6"
+                    barSize={42}
+                  />
+                  <Bar
+                    dataKey="En attente"
+                    stackId="poloStack"
+                    fill="#f59e0b"
+                    radius={[4, 4, 0, 0]}
+                    barSize={42}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Chart 2: Donut Chart - Global Student Payment Rate */}
+          <div className="p-5 rounded-xl bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <PieChartIcon size={17} className="text-bde-rose shrink-0" />
+                  <span>Taux de Paiement Global des Étudiants</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Répartition des étudiants selon leur statut de règlement (Payé, Acompte, Non payé).
+                </p>
+              </div>
+              <span className="text-xs font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+                {paymentChartData.moneyRatePct}% encaissé
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-4 my-auto">
+              <div className="h-56 w-full relative flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={paymentChartData.displaySegments}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={58}
+                      outerRadius={82}
+                      paddingAngle={paymentChartData.hasData ? 3 : 0}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {paymentChartData.displaySegments.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    {paymentChartData.hasData && (
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          borderColor: '#1e293b',
+                          borderRadius: '0.75rem',
+                          color: '#f8fafc',
+                          fontSize: '12px',
+                        }}
+                        formatter={(value: any, name: any) => [
+                          `${value} étudiant(s)`,
+                          name,
+                        ]}
+                      />
+                    )}
+                  </PieChart>
+                </ResponsiveContainer>
+
+                {/* Center Label inside Donut */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {paymentChartData.paidPct}%
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Soldé (Payé)
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment Breakdown Legend & Financial Progress */}
+              <div className="space-y-3 text-xs">
+                {paymentChartData.segments.map((seg) => {
+                  const pct =
+                    paymentChartData.totalStudents > 0
+                      ? Math.round(
+                          (seg.value / paymentChartData.totalStudents) * 100
+                        )
+                      : 0;
+                  return (
+                    <div
+                      key={seg.name}
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200/70 dark:border-slate-800"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-3 h-3 rounded-sm shrink-0"
+                          style={{ backgroundColor: seg.color }}
+                        />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          {seg.name}
+                        </span>
+                      </div>
+                      <div className="font-mono tabular-nums font-bold text-slate-900 dark:text-white">
+                        {seg.value} étud.{' '}
+                        <span className="text-slate-400 font-normal">
+                          ({pct}%)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs font-mono tabular-nums">
+                  <span className="text-slate-500">Total attendu :</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {formatCurrencyDots(paymentChartData.totalExpectedMoney)}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
