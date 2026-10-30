@@ -31,10 +31,11 @@
         }
       }
 
-      // Initialisation instantanée du Mode Sombre Admin sans flash blanc
+      // Initialisation instantanée du Mode Sombre Admin uniquement sur les routes /admin
       try {
+        const isAdminRoute = window.location.pathname.startsWith('/admin') || window.location.hash.includes('/admin');
         const savedDarkMode = localStorage.getItem('adminDarkMode');
-        if (savedDarkMode === 'true' || savedDarkMode === null) {
+        if (isAdminRoute && (savedDarkMode === 'true' || savedDarkMode === null)) {
           document.documentElement.classList.add('dark');
         } else {
           document.documentElement.classList.remove('dark');
@@ -213,119 +214,117 @@
 
       /* ========================================================
          MODE SOMBRE ADMINISTRATEUR RETAPÉ & ULTRA-LISIBLE
+         (Strictement isolé à l'espace .admin-theme-scope.dark)
          ======================================================== */
-      html.dark {
+      .admin-theme-scope.dark {
         color-scheme: dark;
-      }
-
-      html.dark, html.dark body {
         background-color: #0b1120 !important;
         color: #f1f5f9 !important;
       }
 
-      /* Cartes & Surfaces de premier niveau */
-      html.dark .bg-white {
+      /* Cartes & Surfaces de premier niveau dans l'Admin */
+      .admin-theme-scope.dark .bg-white {
         background-color: #131b2e !important;
         border-color: #1e293b !important;
         color: #f8fafc;
       }
 
-      html.dark .bg-gray-50, 
-      html.dark .bg-slate-50 {
+      .admin-theme-scope.dark .bg-gray-50, 
+      .admin-theme-scope.dark .bg-slate-50 {
         background-color: #0d1527 !important;
       }
 
-      html.dark .bg-gray-100, 
-      html.dark .bg-slate-100 {
+      .admin-theme-scope.dark .bg-gray-100, 
+      .admin-theme-scope.dark .bg-slate-100 {
         background-color: #111a2e !important;
         border-color: #1e293b !important;
       }
 
-      /* Couleurs de textes nettes et contrastées */
-      html.dark .text-gray-900, 
-      html.dark .text-gray-800, 
-      html.dark .text-bde-navy {
+      /* Couleurs de textes nettes et contrastées dans l'Admin */
+      .admin-theme-scope.dark .text-gray-900, 
+      .admin-theme-scope.dark .text-gray-800, 
+      .admin-theme-scope.dark .text-bde-navy {
         color: #f8fafc !important;
       }
 
-      html.dark .text-gray-700,
-      html.dark .text-slate-700 {
+      .admin-theme-scope.dark .text-gray-700,
+      .admin-theme-scope.dark .text-slate-700 {
         color: #e2e8f0 !important;
       }
 
-      html.dark .text-gray-600,
-      html.dark .text-slate-600 {
+      .admin-theme-scope.dark .text-gray-600,
+      .admin-theme-scope.dark .text-slate-600 {
         color: #cbd5e1 !important;
       }
 
-      html.dark .text-gray-500,
-      html.dark .text-slate-500 {
+      .admin-theme-scope.dark .text-gray-500,
+      .admin-theme-scope.dark .text-slate-500 {
         color: #94a3b8 !important;
       }
 
-      html.dark .text-gray-400,
-      html.dark .text-slate-400 {
+      .admin-theme-scope.dark .text-gray-400,
+      .admin-theme-scope.dark .text-slate-400 {
         color: #94a3b8 !important;
       }
 
-      /* Bordures de séparation élégantes */
-      html.dark .border-gray-100, 
-      html.dark .border-gray-200, 
-      html.dark .border-gray-300,
-      html.dark .border-slate-200 {
+      /* Bordures de séparation élégantes dans l'Admin */
+      .admin-theme-scope.dark .border-gray-100, 
+      .admin-theme-scope.dark .border-gray-200, 
+      .admin-theme-scope.dark .border-gray-300,
+      .admin-theme-scope.dark .border-slate-200 {
         border-color: #1e293b !important;
       }
 
-      html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
-      html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
-      html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+      .admin-theme-scope.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+      .admin-theme-scope.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+      .admin-theme-scope.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
         border-color: #1e293b !important;
       }
 
-      /* Champs de formulaires en mode sombre */
-      html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), 
-      html.dark select, 
-      html.dark textarea {
+      /* Champs de formulaires en mode sombre dans l'Admin */
+      .admin-theme-scope.dark input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), 
+      .admin-theme-scope.dark select, 
+      .admin-theme-scope.dark textarea {
         background-color: #0d1527 !important;
         color: #f8fafc !important;
         border-color: #334155 !important;
       }
 
-      html.dark input:focus, 
-      html.dark select:focus, 
-      html.dark textarea:focus {
+      .admin-theme-scope.dark input:focus, 
+      .admin-theme-scope.dark select:focus, 
+      .admin-theme-scope.dark textarea:focus {
         border-color: #e74a67 !important;
         box-shadow: 0 0 0 2px rgba(231, 74, 103, 0.25) !important;
       }
 
-      html.dark input::placeholder, 
-      html.dark textarea::placeholder {
+      .admin-theme-scope.dark input::placeholder, 
+      .admin-theme-scope.dark textarea::placeholder {
         color: #64748b !important;
       }
 
       /* Tableaux administratifs */
-      html.dark table th {
+      .admin-theme-scope.dark table th {
         background-color: #090e1a !important;
         color: #cbd5e1 !important;
         border-color: #1e293b !important;
       }
 
-      html.dark table td {
+      .admin-theme-scope.dark table td {
         border-color: #1e293b !important;
       }
 
-      html.dark table tbody tr:hover {
+      .admin-theme-scope.dark table tbody tr:hover {
         background-color: rgba(30, 41, 59, 0.6) !important;
       }
 
       /* Ombres portées sombres profondes */
-      html.dark .shadow-sm {
+      .admin-theme-scope.dark .shadow-sm {
         box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5) !important;
       }
 
-      html.dark .shadow-md,
-      html.dark .shadow-lg,
-      html.dark .shadow-xl {
+      .admin-theme-scope.dark .shadow-md,
+      .admin-theme-scope.dark .shadow-lg,
+      .admin-theme-scope.dark .shadow-xl {
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
       }
     </style>

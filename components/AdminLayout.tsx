@@ -45,6 +45,9 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
   }, [isDarkMode]);
 
   // Synchronize PWA installation state
@@ -227,7 +230,7 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 ${isDarkMode ? 'dark bg-[#0a0f1d] text-slate-100' : 'bg-slate-100/90 text-slate-900'} flex`}>
+    <div className={`admin-theme-scope min-h-screen transition-colors duration-200 ${isDarkMode ? 'dark bg-[#0a0f1d] text-slate-100' : 'bg-slate-100/90 text-slate-900'} flex`}>
       {/* Desktop Sidebar (Permanent) */}
       <aside className={`w-64 ${isDarkMode ? 'bg-[#0d1527] border-r border-slate-800/80 shadow-2xl' : 'bg-bde-navy text-white shadow-xl'} text-white hidden md:flex flex-col fixed h-full z-40`}>
         <SidebarContent isMobile={false} />
