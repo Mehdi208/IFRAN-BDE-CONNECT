@@ -33,6 +33,9 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   Minus,
+  Eye,
+  FileCheck2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -174,7 +177,11 @@ const AdminPolos: React.FC = () => {
   const [amountPaid, setAmountPaid] = useState<number>(10000);
   const [totalPrice, setTotalPrice] = useState<number>(10000);
   const [deliveryStatus, setDeliveryStatus] = useState<'DELIVERED' | 'PENDING_STOCK'>('DELIVERED');
-  const [notes, setNotes] = useState('');
+  const [receiptUrl, setReceiptUrl] = useState<string>('');
+  const [selectedReceiptPreview, setSelectedReceiptPreview] = useState<{
+    studentName: string;
+    url: string;
+  } | null>(null);
 
   // Stock Settings Modal State
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
@@ -549,6 +556,7 @@ const AdminPolos: React.FC = () => {
     const availForM = stockMatrix['BLANC_1A']['M']?.available ?? 0;
     setDeliveryStatus(availForM > 0 ? 'DELIVERED' : 'PENDING_STOCK');
     setNotes('');
+    setReceiptUrl('');
     setIsModalOpen(true);
   };
 
@@ -583,6 +591,7 @@ const AdminPolos: React.FC = () => {
     setTotalPrice(order.totalPrice || inventory.unitPrice || 10000);
     setDeliveryStatus(order.deliveryStatus);
     setNotes(order.notes || '');
+    setReceiptUrl(order.receiptUrl || '');
     setIsModalOpen(true);
   };
 
@@ -635,6 +644,7 @@ const AdminPolos: React.FC = () => {
       totalPrice: Number(totalPrice) || (inventory.unitPrice || 10000),
       deliveryStatus,
       notes: notes.trim(),
+      receiptUrl: receiptUrl.trim() || undefined,
     };
 
     let updatedList: StudentPoloOrder[];
@@ -1482,8 +1492,9 @@ const AdminPolos: React.FC = () => {
                       <th className="py-3 px-3 font-semibold">Classe</th>
                       <th className="py-3 px-3 font-semibold">Polo (Couleur / Année)</th>
                       <th className="py-3 px-3 font-semibold text-center">Tailles & Quantités</th>
-                      <th className="py-3 px-3 font-semibold text-center">Date</th>
+                      <th className="py-3 px-3 font-semibold text-center">Date & Heure</th>
                       <th className="py-3 px-3 font-semibold">Paiement</th>
+                      <th className="py-3 px-3 font-semibold text-center">Reçu</th>
                       <th className="py-3 px-3 font-semibold">Remise du Polo</th>
                       <th className="py-3 px-4 font-semibold text-right">Actions</th>
                     </tr>
@@ -1512,7 +1523,7 @@ const AdminPolos: React.FC = () => {
                                 Tél: {order.phone}
                               </div>
                             )}
-                            {order.notes && (
+                            {order.notes && !order.notes.startsWith('Tél:') && (
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                                 {order.notes}
                               </div>
@@ -1558,9 +1569,27 @@ const AdminPolos: React.FC = () => {
                           </td>
 
                           <td className="py-3 px-3 text-center font-mono tabular-nums text-slate-600 dark:text-slate-400">
-                            {order.date
-                              ? new Date(order.date).toLocaleDateString('fr-FR')
-                              : '-'}
+                            {order.date ? (
+                              <div className="leading-tight">
+                                <div>
+                                  {new Date(order.date).toLocaleDateString('fr-FR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                  })}
+                                </div>
+                                {order.date.includes('T') && (
+                                  <div className="text-[10px] text-slate-400 font-normal">
+                                    {new Date(order.date).toLocaleTimeString('fr-FR', {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              '-'
+                            )}
                           </td>
 
                           <td className="py-3 px-3">
@@ -1596,6 +1625,29 @@ const AdminPolos: React.FC = () => {
                                 </>
                               )}
                             </button>
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            {order.receiptUrl ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedReceiptPreview({
+                                    studentName: `${order.lastName.toUpperCase()} ${order.firstName}`,
+                                    url: order.receiptUrl!,
+                                  })
+                                }
+                                className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:text-emerald-300 dark:border-emerald-800 transition-colors inline-flex items-center gap-1 font-semibold text-[11px]"
+                                title="Voir le reçu de paiement"
+                              >
+                                <Eye size={12} />
+                                <span>Voir reçu</span>
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">
+                                Aucun
+                              </span>
+                            )}
                           </td>
 
                           <td className="py-3 px-3">
@@ -2160,6 +2212,50 @@ const AdminPolos: React.FC = () => {
               >
                 Sauvegarder le Stock en Temps Réel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Aperçu Reçu de Paiement */}
+      {selectedReceiptPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-xl bg-white dark:bg-[#131b2e] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <FileCheck2 size={18} className="text-emerald-600" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Reçu de paiement : {selectedReceiptPreview.studentName}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedReceiptPreview(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-slate-950/20">
+              <img
+                src={selectedReceiptPreview.url}
+                alt={`Reçu de paiement - ${selectedReceiptPreview.studentName}`}
+                className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg shadow-md"
+              />
+            </div>
+
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50 dark:bg-slate-900/60">
+              <span className="text-[11px] text-slate-500">
+                Photo fournie par l'étudiant lors de sa réservation en ligne
+              </span>
+              <a
+                href={selectedReceiptPreview.url}
+                download={`Recu_${selectedReceiptPreview.studentName.replace(/\s+/g, '_')}.jpg`}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs inline-flex items-center gap-1.5 hover:opacity-90 transition-opacity"
+              >
+                <Download size={13} />
+                <span>Télécharger</span>
+              </a>
             </div>
           </div>
         </div>

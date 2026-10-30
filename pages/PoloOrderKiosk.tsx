@@ -27,6 +27,9 @@ import {
   ShieldCheck,
   CreditCard,
   FileCheck2,
+  Upload,
+  Eye,
+  Trash2,
 } from 'lucide-react';
 
 const POLO_SIZES: PoloSize[] = ['S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -56,6 +59,9 @@ const PoloOrderKiosk: React.FC = () => {
   const [studentClass, setStudentClass] = useState<string>('B1 Dev');
   const [phone, setPhone] = useState('');
   const [hasAlreadyPaid, setHasAlreadyPaid] = useState<boolean>(false);
+  const [receiptImage, setReceiptImage] = useState<string>('');
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedQuantities, setSelectedQuantities] = useState<Record<PoloSize, number>>({
     S: 0,
     M: 1,
@@ -130,6 +136,8 @@ const PoloOrderKiosk: React.FC = () => {
     setStudentClass('B1 Dev');
     setPhone('');
     setHasAlreadyPaid(false);
+    setReceiptImage('');
+    setIsUploadingReceipt(false);
     setSelectedQuantities({
       S: 0,
       M: 1,
@@ -141,6 +149,29 @@ const PoloOrderKiosk: React.FC = () => {
     setNotes('');
     setErrorMessage(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Upload du reçu compressé
+  const handleReceiptFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage("Veuillez sélectionner un fichier image valide (JPG, PNG, WebP).");
+      return;
+    }
+
+    setIsUploadingReceipt(true);
+    setErrorMessage(null);
+    try {
+      const dataUrl = await dataService.uploadImage(file);
+      setReceiptImage(dataUrl);
+    } catch (err: any) {
+      console.error("Erreur compression reçu:", err);
+      setErrorMessage("Impossible de traiter cette image. Veuillez en essayer une autre.");
+    } finally {
+      setIsUploadingReceipt(false);
+    }
   };
 
   // Submit Order
@@ -190,16 +221,17 @@ const PoloOrderKiosk: React.FC = () => {
         firstName: cleanFirstName,
         studentClass: studentClass.trim() || 'B1 Dev',
         phone: phone.trim() || undefined,
+        receiptUrl: hasAlreadyPaid && receiptImage ? receiptImage : undefined,
         poloType: autoColor,
         size: primarySize,
         quantity: totalPoloCount,
         items,
-        date: todayIso,
+        date: new Date().toISOString(),
         paymentStatus: hasAlreadyPaid ? 'PAID' : 'UNPAID',
         amountPaid: hasAlreadyPaid ? totalPrice : 0,
         totalPrice: totalPrice,
         deliveryStatus: 'PENDING_STOCK',
-        notes: noteParts.join(' • '),
+        notes: notes.trim() ? notes.trim() : undefined,
       };
 
       const updatedList = await dataService.addPoloOrder(payload);
@@ -661,11 +693,84 @@ const PoloOrderKiosk: React.FC = () => {
                 </div>
 
                 {hasAlreadyPaid && (
-                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
-                    <FileCheck2 size={16} className="text-amber-600 shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Rappel important :</strong> Veuillez bien conserver votre <strong>reçu de paiement</strong>. Vous devrez obligatoirement le présenter au <strong>Bureau Marketing</strong> dès réception des polos pour récupérer votre commande.
-                    </span>
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
+                      <FileCheck2 size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Rappel important :</strong> Veuillez bien conserver votre <strong>reçu de paiement</strong>. Vous devrez obligatoirement le présenter au <strong>Bureau Marketing</strong> dès réception des polos pour récupérer votre commande.
+                      </span>
+                    </div>
+
+                    {/* Zone d'import de photo du reçu */}
+                    <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                      <label className="block text-xs font-bold text-slate-800">
+                        Photo du Reçu de Paiement (Capture ou reçu papier)
+                      </label>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleReceiptFileChange}
+                      />
+
+                      {receiptImage ? (
+                        <div className="space-y-2">
+                          <div className="relative rounded-xl overflow-hidden border border-emerald-300 bg-white max-h-48 flex items-center justify-center p-1">
+                            <img
+                              src={receiptImage}
+                              alt="Reçu de paiement"
+                              className="max-h-44 object-contain rounded-lg"
+                            />
+                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1">
+                              ✓ Reçu joint
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="flex-1 py-2 px-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                            >
+                              <Upload size={14} />
+                              <span>Changer la photo</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReceiptImage('')}
+                              className="py-2 px-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                              <span>Supprimer</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploadingReceipt}
+                          className="w-full py-3.5 px-4 rounded-xl border-2 border-dashed border-slate-300 hover:border-bde-rose bg-white hover:bg-rose-50/40 text-slate-700 text-xs font-semibold flex flex-col items-center justify-center gap-1.5 transition-colors active:scale-98"
+                        >
+                          {isUploadingReceipt ? (
+                            <div className="flex items-center gap-2 text-bde-rose">
+                              <div className="w-4 h-4 border-2 border-bde-rose border-t-transparent rounded-full animate-spin" />
+                              <span>Optimisation et chargement de la photo...</span>
+                            </div>
+                          ) : (
+                            <>
+                              <Upload size={18} className="text-bde-rose" />
+                              <span className="font-bold text-slate-800">
+                                Cliquez pour joindre la photo de votre reçu
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                Format photo ou capture d'écran (PNG, JPG, WebP)
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

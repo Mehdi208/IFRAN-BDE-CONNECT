@@ -254,6 +254,7 @@ export interface StudentPoloOrder {
   firstName: string;
   studentClass: string;
   phone?: string;
+  receiptUrl?: string; // Photo du reçu de paiement
   poloType: PoloColorYear;
   size: PoloSize;
   quantity?: number;
