@@ -10,8 +10,6 @@ import {
   IFRAN_CLASSES,
 } from '../types';
 import {
-  Sun,
-  Moon,
   Shirt,
   CheckCircle2,
   AlertTriangle,
@@ -75,18 +73,8 @@ const formatCurrencyDots = (val: number): string => {
 const KIOSK_RESET_SECONDS = 30;
 
 const PoloOrderKiosk: React.FC = () => {
-  // Theme state: defaults to false (Light Mode) for clear daylight reading & high contrast
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('kiosk_theme') === 'dark';
-  });
-
-  const toggleTheme = () => {
-    setIsDarkMode((prev) => {
-      const next = !prev;
-      localStorage.setItem('kiosk_theme', next ? 'dark' : 'light');
-      return next;
-    });
-  };
+  // Thème clair permanent pour une lisibilité optimale sur mobile et kakémono
+  const isDarkMode = false;
 
   // Live Data State
   const [orders, setOrders] = useState<StudentPoloOrder[]>([]);
@@ -379,30 +367,11 @@ const PoloOrderKiosk: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* Theme Toggle Button (Light by default, click for Dark) */}
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className={`p-2 rounded-xl border transition-all active:scale-95 flex items-center justify-center ${
-                isDarkMode
-                  ? 'bg-slate-900/80 border-slate-800 text-amber-400 hover:text-amber-300 hover:bg-slate-800'
-                  : 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 shadow-sm'
-              }`}
-              title={isDarkMode ? 'Passer en mode clair' : 'Passer en mode sombre'}
-              aria-label="Changer le thème"
-            >
-              {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
-
             {/* Fullscreen Button */}
             <button
               type="button"
               onClick={handleToggleFullscreen}
-              className={`p-2 rounded-xl border transition-all active:scale-95 flex items-center justify-center ${
-                isDarkMode
-                  ? 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
-                  : 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 shadow-sm'
-              }`}
+              className="p-2 rounded-xl border bg-white border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 shadow-sm transition-all active:scale-95 flex items-center justify-center"
               title={isFullscreen ? 'Quitter le plein écran' : 'Mode Plein Écran Kiosk'}
               aria-label="Plein écran"
             >
