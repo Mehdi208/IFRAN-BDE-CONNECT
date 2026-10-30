@@ -810,13 +810,10 @@ const PoloOrderKiosk: React.FC = () => {
                     >
                       {hasAlreadyPaid && <span className="text-[10px] font-black">✓</span>}
                     </div>
-                    <div>
+                    <div className="my-auto">
                       <div className="text-xs font-black text-slate-900">
-                        Oui, j'ai mon reçu de paiement
+                        Oui, j'ai mon reçu papier
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        J'ai ma fiche de reçu papier.
-                      </p>
                     </div>
                   </button>
 
