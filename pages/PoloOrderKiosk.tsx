@@ -27,9 +27,10 @@ import {
   ShieldCheck,
   CreditCard,
   FileCheck2,
-  Upload,
-  Eye,
+  Camera,
+  Image as ImageIcon,
   Trash2,
+  Eye,
 } from 'lucide-react';
 
 const POLO_SIZES: PoloSize[] = ['S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -46,6 +47,64 @@ const getColorFromClass = (cls: string): PoloColorYear => {
 };
 
 const KIOSK_RESET_SECONDS = 30;
+const DRAFT_STORAGE_KEY = 'ifran_kiosk_polo_draft_v2';
+
+// Robust, memory-safe client-side image compression for mobile camera & gallery
+const compressReceiptImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) {
+      reject(new Error("Le fichier sélectionné n'est pas une image valide."));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Erreur lors de la lecture du fichier.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Impossible de décoder l'image."));
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          // Max dimension 1000px: preserves clear readability of A4 paper receipts, stamps and dates
+          const MAX_DIM = 1000;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Impossible de préparer le canvas de compression.'));
+            return;
+          }
+
+          // White background for safety
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Quality 0.72 produces ~70-120 KB JPEG, far below Firestore 1MB document limit
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 const PoloOrderKiosk: React.FC = () => {
   // Live Data State
@@ -53,32 +112,45 @@ const PoloOrderKiosk: React.FC = () => {
     dataService.getDefaultPoloInventory()
   );
 
+  // Hydrate draft from sessionStorage (prevents state loss if mobile browser reloads on camera return)
+  const initialDraft = useMemo(() => {
+    try {
+      const saved = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
+  }, []);
+
   // Form State
-  const [lastName, setLastName] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [studentClass, setStudentClass] = useState<string>('B1 Dev');
-  const [phone, setPhone] = useState('');
-  const [hasAlreadyPaid, setHasAlreadyPaid] = useState<boolean>(false);
-  const [receiptImage, setReceiptImage] = useState<string>('');
-  const [isUploadingReceipt, setIsUploadingReceipt] = useState<boolean>(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedQuantities, setSelectedQuantities] = useState<Record<PoloSize, number>>({
-    S: 0,
-    M: 1,
-    L: 0,
-    XL: 0,
-    XXL: 0,
-    '3XL': 0,
-  });
-  const [notes, setNotes] = useState('');
+  const [lastName, setLastName] = useState<string>(initialDraft?.lastName || '');
+  const [firstName, setFirstName] = useState<string>(initialDraft?.firstName || '');
+  const [studentClass, setStudentClass] = useState<string>(initialDraft?.studentClass || 'B1 Dev');
+  const [phone, setPhone] = useState<string>(initialDraft?.phone || '');
+  const [hasAlreadyPaid, setHasAlreadyPaid] = useState<boolean>(initialDraft?.hasAlreadyPaid || false);
+  const [receiptImage, setReceiptImage] = useState<string>(initialDraft?.receiptImage || '');
+  const [isProcessingReceipt, setIsProcessingReceipt] = useState<boolean>(false);
+  const [selectedQuantities, setSelectedQuantities] = useState<Record<PoloSize, number>>(
+    initialDraft?.selectedQuantities || {
+      S: 0,
+      M: 1,
+      L: 0,
+      XL: 0,
+      XXL: 0,
+      '3XL': 0,
+    }
+  );
+  const [notes, setNotes] = useState<string>(initialDraft?.notes || '');
 
   // UI / Kiosk State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<StudentPoloOrder | null>(null);
   const [resetCountdown, setResetCountdown] = useState<number>(KIOSK_RESET_SECONDS);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Real-time subscription for unit price accuracy
   useEffect(() => {
@@ -90,6 +162,40 @@ const PoloOrderKiosk: React.FC = () => {
       if (unsubInv) unsubInv();
     };
   }, []);
+
+  // Auto-persist draft to sessionStorage (Anti-crash / Anti-reload guarantee on mobile)
+  useEffect(() => {
+    if (confirmedOrder) {
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+      return;
+    }
+
+    try {
+      const draft = {
+        lastName,
+        firstName,
+        studentClass,
+        phone,
+        hasAlreadyPaid,
+        receiptImage,
+        selectedQuantities,
+        notes,
+      };
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch (e) {
+      // Ignore quota error if storage is restricted
+    }
+  }, [
+    lastName,
+    firstName,
+    studentClass,
+    phone,
+    hasAlreadyPaid,
+    receiptImage,
+    selectedQuantities,
+    notes,
+    confirmedOrder,
+  ]);
 
   // Auto-reset timer when order is confirmed
   useEffect(() => {
@@ -130,6 +236,7 @@ const PoloOrderKiosk: React.FC = () => {
 
   // Reset form for next student
   const handleResetForm = () => {
+    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
     setConfirmedOrder(null);
     setLastName('');
     setFirstName('');
@@ -137,7 +244,7 @@ const PoloOrderKiosk: React.FC = () => {
     setPhone('');
     setHasAlreadyPaid(false);
     setReceiptImage('');
-    setIsUploadingReceipt(false);
+    setIsProcessingReceipt(false);
     setSelectedQuantities({
       S: 0,
       M: 1,
@@ -151,26 +258,24 @@ const PoloOrderKiosk: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Upload du reçu compressé
+  // Process photo selected from camera or gallery
   const handleReceiptFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setErrorMessage("Veuillez sélectionner un fichier image valide (JPG, PNG, WebP).");
-      return;
-    }
-
-    setIsUploadingReceipt(true);
+    setIsProcessingReceipt(true);
     setErrorMessage(null);
+
     try {
-      const dataUrl = await dataService.uploadImage(file);
-      setReceiptImage(dataUrl);
+      const compressedDataUrl = await compressReceiptImage(file);
+      setReceiptImage(compressedDataUrl);
     } catch (err: any) {
-      console.error("Erreur compression reçu:", err);
-      setErrorMessage("Impossible de traiter cette image. Veuillez en essayer une autre.");
+      console.error('Erreur compression photo reçu:', err);
+      setErrorMessage("Impossible de traiter cette photo. Veuillez réessayer ou choisir une autre image.");
     } finally {
-      setIsUploadingReceipt(false);
+      setIsProcessingReceipt(false);
+      // Reset input value so the same file can be re-selected if needed
+      e.target.value = '';
     }
   };
 
@@ -205,16 +310,6 @@ const PoloOrderKiosk: React.FC = () => {
       }));
 
       const primarySize: PoloSize = items[0]?.size || 'M';
-      const todayIso = new Date().toISOString().split('T')[0];
-
-      const paymentNote = hasAlreadyPaid
-        ? 'Déjà payé (Reçu à présenter au Bureau Marketing)'
-        : 'Non payé (Paiement à effectuer)';
-
-      const noteParts: string[] = [];
-      if (phone.trim()) noteParts.push(`Tél: ${phone.trim()}`);
-      noteParts.push(paymentNote);
-      if (notes.trim()) noteParts.push(notes.trim());
 
       const payload: Omit<StudentPoloOrder, 'id'> = {
         lastName: cleanLastName,
@@ -236,6 +331,7 @@ const PoloOrderKiosk: React.FC = () => {
 
       const updatedList = await dataService.addPoloOrder(payload);
       const created = updatedList[0];
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY);
       setConfirmedOrder(created);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
@@ -341,6 +437,21 @@ const PoloOrderKiosk: React.FC = () => {
                       {confirmedOrder.paymentStatus === 'PAID' ? 'Déjà Payé' : 'À Régler'}
                     </span>
                   </div>
+
+                  {confirmedOrder.receiptUrl && (
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-slate-500">Fiche de reçu :</span>
+                      <button
+                        type="button"
+                        onClick={() => setReceiptModalOpen(true)}
+                        className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 underline flex items-center gap-1"
+                      >
+                        <Eye size={12} />
+                        <span>Voir la photo du reçu</span>
+                      </button>
+                    </div>
+                  )}
+
                   <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-sm">
                     <span className="font-sans text-slate-600">Articles :</span>
                     <span className="font-bold text-slate-900">
@@ -364,7 +475,7 @@ const PoloOrderKiosk: React.FC = () => {
                   <Building2 size={17} className="text-bde-rose" />
                   <span>
                     {confirmedOrder.paymentStatus === 'PAID'
-                      ? 'Comment récupérer votre polo déjà payé ?'
+                      ? 'Comment récupérer votre polo ?'
                       : 'Comment régler et récupérer votre polo ?'}
                   </span>
                 </div>
@@ -374,8 +485,12 @@ const PoloOrderKiosk: React.FC = () => {
                     <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2.5">
                       <FileCheck2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
                       <div>
-                        <strong className="block text-emerald-950 font-bold">Conservez précieusement votre reçu !</strong>
-                        Présentez votre reçu de paiement lors du retrait au Bureau Marketing.
+                        <strong className="block text-emerald-950 font-bold">
+                          Gardez bien votre fiche de reçu papier !
+                        </strong>
+                        {confirmedOrder.receiptUrl
+                          ? "Votre reçu a bien été transmis. Gardez votre fiche papier pour le contrôle lors du retrait."
+                          : "Vous présenterez votre fiche de reçu papier au Bureau Marketing lors du retrait pour récupérer votre polo."}
                       </div>
                     </div>
                     <div className="flex items-start gap-2.5">
@@ -391,7 +506,7 @@ const PoloOrderKiosk: React.FC = () => {
                         2
                       </div>
                       <div>
-                        Présentez votre <strong className="text-slate-900">reçu de paiement</strong> ainsi que votre nom pour vérification immédiate.
+                        Présentez votre <strong className="text-slate-900">fiche de reçu de paiement</strong> ainsi que votre nom pour vérification.
                       </div>
                     </div>
                     <div className="flex items-start gap-2.5">
@@ -410,7 +525,7 @@ const PoloOrderKiosk: React.FC = () => {
                         1
                       </div>
                       <div>
-                        Rendez-vous au <strong className="text-slate-900">Bureau du BDE / Bureau Marketing (RDC du campus)</strong> aux heures de permanence.
+                        Rendez-vous au <strong className="text-slate-900">Bureau Marketing</strong> lors du retrait.
                       </div>
                     </div>
                     <div className="flex items-start gap-2.5">
@@ -418,7 +533,7 @@ const PoloOrderKiosk: React.FC = () => {
                         2
                       </div>
                       <div>
-                        Réglez votre commande en <strong className="text-slate-900">Espèces</strong>, par <strong className="text-slate-900">Wave</strong> ou <strong className="text-slate-900">Orange Money</strong> en indiquant votre nom, et conservez votre reçu.
+                        Réglez votre commande en <strong className="text-slate-900">Espèces</strong>, par <strong className="text-slate-900">Wave</strong> ou <strong className="text-slate-900">Orange Money</strong> et conservez votre fiche de reçu.
                       </div>
                     </div>
                     <div className="flex items-start gap-2.5">
@@ -426,7 +541,7 @@ const PoloOrderKiosk: React.FC = () => {
                         3
                       </div>
                       <div>
-                        Si votre taille est en stock, elle vous est <strong className="text-slate-900">remise immédiatement</strong>. Sinon, elle sera prioritaire sur la livraison fournisseur !
+                        Votre polo vous sera remis directement dès disponibilité du stock !
                       </div>
                     </div>
                   </div>
@@ -461,10 +576,52 @@ const PoloOrderKiosk: React.FC = () => {
                   <span>Passer à l'étudiant suivant / Nouvelle commande</span>
                 </button>
               </div>
+
+              {/* Modal Reçu plein écran pour l'étudiant */}
+              {receiptModalOpen && confirmedOrder.receiptUrl && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                  <div className="relative w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 flex flex-col max-h-[90vh]">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
+                      <span className="text-xs font-bold text-slate-900">Photo de votre fiche de reçu</span>
+                      <button
+                        type="button"
+                        onClick={() => setReceiptModalOpen(false)}
+                        className="p-1 rounded-lg hover:bg-slate-100 text-slate-500"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="overflow-auto flex-1 flex items-center justify-center">
+                      <img
+                        src={confirmedOrder.receiptUrl}
+                        alt="Reçu de paiement"
+                        className="max-h-[70vh] object-contain rounded-lg"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             /* ORDER FORM */
             <form onSubmit={handleSubmitOrder} className="space-y-4">
+              {/* Hidden file inputs for Camera and Gallery */}
+              <input
+                type="file"
+                ref={cameraInputRef}
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleReceiptFileChange}
+              />
+              <input
+                type="file"
+                ref={galleryInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleReceiptFileChange}
+              />
+
               {/* Introduction Banner */}
               <div className="p-4 rounded-2xl border bg-gradient-to-r from-rose-50/70 via-white to-slate-50 border-rose-200/80 flex items-center justify-between gap-3 shadow-sm">
                 <div>
@@ -655,17 +812,20 @@ const PoloOrderKiosk: React.FC = () => {
                     </div>
                     <div>
                       <div className="text-xs font-black text-slate-900">
-                        Oui, j'ai déjà payé
+                        Oui, j'ai mon reçu de paiement
                       </div>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        J'ai mon reçu de paiement (Wave, OM, espèces ou scolarité).
+                        J'ai ma fiche de reçu papier.
                       </p>
                     </div>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setHasAlreadyPaid(false)}
+                    onClick={() => {
+                      setHasAlreadyPaid(false);
+                      setReceiptImage('');
+                    }}
                     className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 active:scale-98 ${
                       !hasAlreadyPaid
                         ? 'border-bde-rose bg-rose-50/80 ring-2 ring-bde-rose shadow-sm'
@@ -686,89 +846,109 @@ const PoloOrderKiosk: React.FC = () => {
                         Non, pas encore payé
                       </div>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Je réglerai au Bureau du BDE / Marketing lors du retrait.
+                        Je réglerai au Bureau Marketing lors du retrait.
                       </p>
                     </div>
                   </button>
                 </div>
 
                 {hasAlreadyPaid && (
-                  <div className="space-y-3">
+                  <div className="space-y-3 pt-1">
                     <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
                       <FileCheck2 size={16} className="text-amber-600 shrink-0 mt-0.5" />
                       <span>
-                        <strong>Rappel important :</strong> Veuillez bien conserver votre <strong>reçu de paiement</strong>. Vous devrez obligatoirement le présenter au <strong>Bureau Marketing</strong> dès réception des polos pour récupérer votre commande.
+                        <strong>Rappel important :</strong> Veuillez bien conserver votre <strong>fiche de reçu papier</strong>. Vous devrez obligatoirement la présenter au <strong>Bureau Marketing</strong> dès réception des polos pour récupérer votre commande.
                       </span>
                     </div>
 
-                    {/* Zone d'import de photo du reçu */}
-                    <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-                      <label className="block text-xs font-bold text-slate-800">
-                        Photo du Reçu de Paiement (Capture ou reçu papier)
-                      </label>
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleReceiptFileChange}
-                      />
+                    {/* Zone d'import de photo de la fiche de reçu (OPTIONNEL) */}
+                    <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/80 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-slate-800">
+                          Photo de votre fiche de reçu
+                        </label>
+                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded-full">
+                          Optionnel
+                        </span>
+                      </div>
 
                       {receiptImage ? (
                         <div className="space-y-2">
-                          <div className="relative rounded-xl overflow-hidden border border-emerald-300 bg-white max-h-48 flex items-center justify-center p-1">
+                          <div className="relative rounded-xl overflow-hidden border border-emerald-300 bg-white max-h-56 flex items-center justify-center p-1.5 shadow-sm">
                             <img
                               src={receiptImage}
-                              alt="Reçu de paiement"
-                              className="max-h-44 object-contain rounded-lg"
+                              alt="Photo fiche de reçu"
+                              className="max-h-52 object-contain rounded-lg"
                             />
-                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1">
+                            <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1">
                               ✓ Reçu joint
                             </span>
                           </div>
+
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => fileInputRef.current?.click()}
+                              onClick={() => cameraInputRef.current?.click()}
                               className="flex-1 py-2 px-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                             >
-                              <Upload size={14} />
-                              <span>Changer la photo</span>
+                              <Camera size={14} className="text-bde-rose" />
+                              <span>Reprendre photo</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => galleryInputRef.current?.click()}
+                              className="flex-1 py-2 px-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                            >
+                              <ImageIcon size={14} className="text-blue-600" />
+                              <span>Changer image</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => setReceiptImage('')}
                               className="py-2 px-3 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                              title="Supprimer la photo"
                             >
                               <Trash2 size={14} />
-                              <span>Supprimer</span>
                             </button>
                           </div>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={isUploadingReceipt}
-                          className="w-full py-3.5 px-4 rounded-xl border-2 border-dashed border-slate-300 hover:border-bde-rose bg-white hover:bg-rose-50/40 text-slate-700 text-xs font-semibold flex flex-col items-center justify-center gap-1.5 transition-colors active:scale-98"
-                        >
-                          {isUploadingReceipt ? (
-                            <div className="flex items-center gap-2 text-bde-rose">
-                              <div className="w-4 h-4 border-2 border-bde-rose border-t-transparent rounded-full animate-spin" />
-                              <span>Optimisation et chargement de la photo...</span>
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {/* Option A: Direct Mobile Camera */}
+                            <button
+                              type="button"
+                              onClick={() => cameraInputRef.current?.click()}
+                              disabled={isProcessingReceipt}
+                              className="py-3 px-3 rounded-xl border-2 border-dashed border-rose-300 hover:border-bde-rose bg-white hover:bg-rose-50/50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-98"
+                            >
+                              <Camera size={17} className="text-bde-rose shrink-0" />
+                              <span className="font-bold text-slate-800">Prendre en photo</span>
+                            </button>
+
+                            {/* Option B: Choose from Gallery / Files */}
+                            <button
+                              type="button"
+                              onClick={() => galleryInputRef.current?.click()}
+                              disabled={isProcessingReceipt}
+                              className="py-3 px-3 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-500 bg-white hover:bg-blue-50/50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-98"
+                            >
+                              <ImageIcon size={17} className="text-blue-600 shrink-0" />
+                              <span className="font-bold text-slate-800">Depuis la galerie</span>
+                            </button>
+                          </div>
+
+                          {isProcessingReceipt && (
+                            <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-bde-rose text-xs flex items-center justify-center gap-2">
+                              <div className="w-3.5 h-3.5 border-2 border-bde-rose border-t-transparent rounded-full animate-spin" />
+                              <span className="font-medium">Optimisation et sauvegarde de la photo...</span>
                             </div>
-                          ) : (
-                            <>
-                              <Upload size={18} className="text-bde-rose" />
-                              <span className="font-bold text-slate-800">
-                                Cliquez pour joindre la photo de votre reçu
-                              </span>
-                              <span className="text-[10px] text-slate-400">
-                                Format photo ou capture d'écran (PNG, JPG, WebP)
-                              </span>
-                            </>
                           )}
-                        </button>
+
+                          <p className="text-[11px] text-slate-500 leading-relaxed italic">
+                            💡 Si vous n'avez pas votre reçu sous la main maintenant, pas d'inquiétude : vous pouvez quand même valider votre commande et présenter votre fiche le jour du retrait au Bureau Marketing.
+                          </p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -790,7 +970,7 @@ const PoloOrderKiosk: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600">Statut de paiement :</span>
+                  <span className="text-slate-600">Statut de paiement déclaré :</span>
                   <span
                     className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
                       hasAlreadyPaid
