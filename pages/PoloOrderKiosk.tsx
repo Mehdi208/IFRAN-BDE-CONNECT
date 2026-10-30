@@ -31,6 +31,8 @@ import {
   Image as ImageIcon,
   Trash2,
   Eye,
+  X,
+  RefreshCw,
 } from 'lucide-react';
 
 const POLO_SIZES: PoloSize[] = ['S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -49,60 +51,103 @@ const getColorFromClass = (cls: string): PoloColorYear => {
 const KIOSK_RESET_SECONDS = 30;
 const DRAFT_STORAGE_KEY = 'ifran_kiosk_polo_draft_v2';
 
-// Robust, memory-safe client-side image compression for mobile camera & gallery
-const compressReceiptImage = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith('image/')) {
-      reject(new Error("Le fichier sélectionné n'est pas une image valide."));
-      return;
-    }
+// Zero-Base64-spike, ultra-low-memory image compression (uses createImageBitmap / ObjectURL instead of FileReader.readAsDataURL)
+const compressReceiptImage = async (file: File): Promise<string> => {
+  if (!file || !file.type.startsWith('image/')) {
+    throw new Error("Le fichier sélectionné n'est pas une image valide.");
+  }
 
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Erreur lors de la lecture du fichier.'));
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("Impossible de décoder l'image."));
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          // Max dimension 1000px: preserves clear readability of A4 paper receipts, stamps and dates
-          const MAX_DIM = 1000;
-          let width = img.width;
-          let height = img.height;
+  const MAX_DIM = 900;
 
-          if (width > MAX_DIM || height > MAX_DIM) {
-            if (width > height) {
-              height = Math.round((height * MAX_DIM) / width);
-              width = MAX_DIM;
-            } else {
-              width = Math.round((width * MAX_DIM) / height);
-              height = MAX_DIM;
-            }
-          }
+  // Path 1: Modern hardware-accelerated createImageBitmap (lowest RAM usage on Android & iOS)
+  if (typeof window !== 'undefined' && 'createImageBitmap' in window) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      let width = bitmap.width;
+      let height = bitmap.height;
 
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Impossible de préparer le canvas de compression.'));
-            return;
-          }
-
-          // White background for safety
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Quality 0.72 produces ~70-120 KB JPEG, far below Firestore 1MB document limit
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
-          resolve(dataUrl);
-        } catch (err) {
-          reject(err);
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) {
+          height = Math.round((height * MAX_DIM) / width);
+          width = MAX_DIM;
+        } else {
+          width = Math.round((width * MAX_DIM) / height);
+          height = MAX_DIM;
         }
-      };
-      img.src = e.target?.result as string;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        bitmap.close();
+        throw new Error('Impossible de préparer le canvas de compression.');
+      }
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close(); // Immediately free native bitmap memory
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      // Immediately release GPU/RAM canvas backing store
+      canvas.width = 0;
+      canvas.height = 0;
+      return dataUrl;
+    } catch (e) {
+      // Fallback to ObjectURL if createImageBitmap fails on a specific format
+    }
+  }
+
+  // Path 2: ObjectURL pointer (avoids loading 15MB file as Base64 string in JS heap)
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Impossible de décoder l'image."));
     };
-    reader.readAsDataURL(file);
+    img.onload = () => {
+      try {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        URL.revokeObjectURL(objectUrl);
+
+        if (!ctx) {
+          reject(new Error('Impossible de préparer le canvas de compression.'));
+          return;
+        }
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        canvas.width = 0;
+        canvas.height = 0;
+        resolve(dataUrl);
+      } catch (err) {
+        URL.revokeObjectURL(objectUrl);
+        reject(err);
+      }
+    };
+    img.src = objectUrl;
   });
 };
 
@@ -112,7 +157,7 @@ const PoloOrderKiosk: React.FC = () => {
     dataService.getDefaultPoloInventory()
   );
 
-  // Hydrate draft from sessionStorage (prevents state loss if mobile browser reloads on camera return)
+  // Hydrate draft from sessionStorage (prevents state loss if mobile browser reloads)
   const initialDraft = useMemo(() => {
     try {
       const saved = sessionStorage.getItem(DRAFT_STORAGE_KEY);
@@ -148,9 +193,150 @@ const PoloOrderKiosk: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
 
+  // In-Page Lightweight WebRTC Camera State (Prevents Android OS "Low Memory" crash caused by external 50MP Camera app)
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCameraStarting, setIsCameraStarting] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Stop active camera tracks immediately to free RAM
+  const stopInPageCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {}
+      });
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      stopInPageCamera();
+    };
+  }, []);
+
+  // Launch lightweight in-page camera (1280x960 stream = <5MB RAM instead of 500MB native camera app)
+  const startInPageCamera = async (facing: 'environment' | 'user' = cameraFacingMode) => {
+    setErrorMessage(null);
+    setCameraError(null);
+    setIsCameraOpen(true);
+    setIsCameraStarting(true);
+    stopInPageCamera();
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setIsCameraStarting(false);
+      setCameraError(
+        "Votre navigateur ne permet pas d'ouvrir la caméra intégrée. Veuillez utiliser le bouton « Depuis la galerie »."
+      );
+      return;
+    }
+
+    try {
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1280, max: 1600 },
+            height: { ideal: 960, max: 1200 },
+          },
+        });
+      } catch (firstErr) {
+        // Fallback if specific constraints aren't supported by the device camera driver
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: true,
+        });
+      }
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch (err: any) {
+      console.warn('Erreur ouverture caméra intégrée:', err);
+      setCameraError(
+        "Accès à l'appareil photo refusé ou indisponible. Autorisez la caméra dans votre navigateur ou choisissez une photo depuis votre galerie."
+      );
+    } finally {
+      setIsCameraStarting(false);
+    }
+  };
+
+  const handleCloseCameraModal = () => {
+    stopInPageCamera();
+    setIsCameraOpen(false);
+    setCameraError(null);
+  };
+
+  const handleSwitchCameraFacing = () => {
+    const nextFacing = cameraFacingMode === 'environment' ? 'user' : 'environment';
+    setCameraFacingMode(nextFacing);
+    startInPageCamera(nextFacing);
+  };
+
+  // Instant zero-file-allocation frame capture directly from <video> element
+  const handleCapturePhotoFromVideo = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      setCameraError('La caméra se prépare encore, veuillez patienter une seconde.');
+      return;
+    }
+
+    try {
+      const MAX_DIM = 900;
+      let width = video.videoWidth;
+      let height = video.videoHeight;
+
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) {
+          height = Math.round((height * MAX_DIM) / width);
+          width = MAX_DIM;
+        } else {
+          width = Math.round((width * MAX_DIM) / height);
+          height = MAX_DIM;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setCameraError('Erreur lors de la capture. Réessayez.');
+        return;
+      }
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(video, 0, 0, width, height);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+      canvas.width = 0;
+      canvas.height = 0;
+
+      // Immediately shut down camera stream to release all RAM
+      stopInPageCamera();
+      setIsCameraOpen(false);
+      setReceiptImage(dataUrl);
+    } catch (e) {
+      console.error('Erreur capture vidéo:', e);
+      setCameraError('Impossible de capturer la photo. Essayez depuis la galerie.');
+    }
+  };
 
   // Real-time subscription for unit price accuracy
   useEffect(() => {
@@ -605,15 +791,7 @@ const PoloOrderKiosk: React.FC = () => {
           ) : (
             /* ORDER FORM */
             <form onSubmit={handleSubmitOrder} className="space-y-4">
-              {/* Hidden file inputs for Camera and Gallery */}
-              <input
-                type="file"
-                ref={cameraInputRef}
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={handleReceiptFileChange}
-              />
+              {/* Hidden file input for Gallery selection */}
               <input
                 type="file"
                 ref={galleryInputRef}
@@ -885,7 +1063,7 @@ const PoloOrderKiosk: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => cameraInputRef.current?.click()}
+                              onClick={() => startInPageCamera('environment')}
                               className="flex-1 py-2 px-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                             >
                               <Camera size={14} className="text-bde-rose" />
@@ -912,10 +1090,10 @@ const PoloOrderKiosk: React.FC = () => {
                       ) : (
                         <div className="space-y-2">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {/* Option A: Direct Mobile Camera */}
+                            {/* Option A: In-Page Lightweight Camera (No external app switch, zero memory crash) */}
                             <button
                               type="button"
-                              onClick={() => cameraInputRef.current?.click()}
+                              onClick={() => startInPageCamera('environment')}
                               disabled={isProcessingReceipt}
                               className="py-3 px-3 rounded-xl border-2 border-dashed border-rose-300 hover:border-bde-rose bg-white hover:bg-rose-50/50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-98"
                             >
@@ -1018,6 +1196,124 @@ const PoloOrderKiosk: React.FC = () => {
           IFRAN BDE CONNECT • Design by Mehdi Traore
         </footer>
       </div>
+
+      {/* IN-PAGE LIGHTWEIGHT CAMERA MODAL (Prevents Android OS Low-Memory crash from native 50MP camera app) */}
+      {isCameraOpen && (
+        <div className="fixed inset-0 z-[80] bg-slate-950/95 backdrop-blur-md flex flex-col justify-between p-3 sm:p-5 text-white animate-in fade-in duration-150">
+          {/* Top Bar */}
+          <div className="flex items-center justify-between gap-2 max-w-md w-full mx-auto">
+            <div className="flex items-center gap-2">
+              <Camera size={18} className="text-bde-rose" />
+              <div>
+                <h3 className="text-xs sm:text-sm font-black tracking-tight">
+                  Photographier votre fiche de reçu
+                </h3>
+                <p className="text-[10px] text-slate-400">
+                  Placez votre reçu papier bien à plat dans le cadre
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleSwitchCameraFacing}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 transition-colors"
+                title="Changer de caméra (Avant / Arrière)"
+              >
+                <RefreshCw size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseCameraModal}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-rose-600 text-slate-200 hover:text-white transition-colors"
+                title="Fermer la caméra"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Center Video Viewport */}
+          <div className="relative flex-1 my-3 max-w-md w-full mx-auto rounded-2xl overflow-hidden bg-black border border-slate-800 flex items-center justify-center shadow-2xl">
+            {isCameraStarting && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/80 text-xs text-slate-300">
+                <div className="w-7 h-7 border-2 border-bde-rose border-t-transparent rounded-full animate-spin" />
+                <span>Activation de l'appareil photo...</span>
+              </div>
+            )}
+
+            {cameraError ? (
+              <div className="p-6 text-center space-y-4 max-w-xs mx-auto">
+                <AlertTriangle size={34} className="text-amber-400 mx-auto" />
+                <p className="text-xs text-slate-200 leading-relaxed">{cameraError}</p>
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCloseCameraModal();
+                      galleryInputRef.current?.click();
+                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2"
+                  >
+                    <ImageIcon size={16} />
+                    <span>Choisir une photo depuis la galerie</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCloseCameraModal}
+                    className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs"
+                  >
+                    Retour au formulaire
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                {/* Framing Guide Overlay for A4 Receipt */}
+                <div className="absolute inset-5 border-2 border-dashed border-white/50 rounded-xl pointer-events-none flex flex-col justify-between p-2.5">
+                  <div className="text-[10px] font-semibold bg-black/60 backdrop-blur-sm text-white/90 px-2.5 py-1 rounded-full w-max mx-auto">
+                    Cadrez votre reçu ici
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Bottom Shutter Bar */}
+          {!cameraError && (
+            <div className="max-w-md w-full mx-auto flex flex-col items-center gap-2.5 pb-2">
+              <button
+                type="button"
+                onClick={handleCapturePhotoFromVideo}
+                disabled={isCameraStarting}
+                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-bde-rose to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-black text-sm uppercase tracking-wider shadow-xl shadow-rose-900/40 flex items-center justify-center gap-2.5 active:scale-95 transition-all disabled:opacity-40"
+              >
+                <Camera size={20} />
+                <span>Capturer la photo du reçu</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleCloseCameraModal();
+                  galleryInputRef.current?.click();
+                }}
+                className="text-[11px] text-slate-400 hover:text-white underline py-1"
+              >
+                Ou sélectionner une image déjà présente dans ma galerie
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

@@ -101,57 +101,98 @@ const formatCurrencyDots = (val: number): string => {
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.')} FCFA`;
 };
 
-// High-readability image compression for receipts attached by Admin (<120 KB JPEG for Firestore)
-const compressReceiptImage = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith('image/')) {
-      reject(new Error("Le fichier sélectionné n'est pas une image valide."));
-      return;
-    }
+// Zero-Base64-spike, ultra-low-memory image compression for receipts attached by Admin
+const compressReceiptImage = async (file: File): Promise<string> => {
+  if (!file || !file.type.startsWith('image/')) {
+    throw new Error("Le fichier sélectionné n'est pas une image valide.");
+  }
 
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Erreur lors de la lecture du fichier.'));
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("Impossible de décoder l'image."));
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          const MAX_DIM = 1000;
-          let width = img.width;
-          let height = img.height;
+  const MAX_DIM = 900;
 
-          if (width > MAX_DIM || height > MAX_DIM) {
-            if (width > height) {
-              height = Math.round((height * MAX_DIM) / width);
-              width = MAX_DIM;
-            } else {
-              width = Math.round((width * MAX_DIM) / height);
-              height = MAX_DIM;
-            }
-          }
+  if (typeof window !== 'undefined' && 'createImageBitmap' in window) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      let width = bitmap.width;
+      let height = bitmap.height;
 
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Impossible de préparer le canvas de compression.'));
-            return;
-          }
-
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
-          resolve(dataUrl);
-        } catch (err) {
-          reject(err);
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) {
+          height = Math.round((height * MAX_DIM) / width);
+          width = MAX_DIM;
+        } else {
+          width = Math.round((width * MAX_DIM) / height);
+          height = MAX_DIM;
         }
-      };
-      img.src = e.target?.result as string;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        bitmap.close();
+        throw new Error('Impossible de préparer le canvas de compression.');
+      }
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      canvas.width = 0;
+      canvas.height = 0;
+      return dataUrl;
+    } catch (e) {}
+  }
+
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Impossible de décoder l'image."));
     };
-    reader.readAsDataURL(file);
+    img.onload = () => {
+      try {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        URL.revokeObjectURL(objectUrl);
+
+        if (!ctx) {
+          reject(new Error('Impossible de préparer le canvas de compression.'));
+          return;
+        }
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        canvas.width = 0;
+        canvas.height = 0;
+        resolve(dataUrl);
+      } catch (err) {
+        URL.revokeObjectURL(objectUrl);
+        reject(err);
+      }
+    };
+    img.src = objectUrl;
   });
 };
 
@@ -305,7 +346,11 @@ const AdminPolos: React.FC = () => {
   const [isUploadingReceipt, setIsUploadingReceipt] = useState<boolean>(false);
   const [receiptError, setReceiptError] = useState<string | null>(null);
   const receiptInputRef = useRef<HTMLInputElement>(null);
+  const directReceiptInputRef = useRef<HTMLInputElement>(null);
+  const [directUploadOrderId, setDirectUploadOrderId] = useState<string | null>(null);
+  const [uploadingOrderId, setUploadingOrderId] = useState<string | null>(null);
   const [selectedReceiptPreview, setSelectedReceiptPreview] = useState<{
+    orderId: string;
     studentName: string;
     url: string;
   } | null>(null);
@@ -730,7 +775,7 @@ const AdminPolos: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // Handle Admin Receipt Image Upload & Compression
+  // Handle Admin Receipt Image Upload & Compression (inside Add Modal)
   const handleReceiptFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -752,6 +797,81 @@ const AdminPolos: React.FC = () => {
       setIsUploadingReceipt(false);
       e.target.value = '';
     }
+  };
+
+  // Trigger 1-Click Direct Receipt Upload for an existing student row (NO MODAL POPUP)
+  const triggerDirectReceiptUpload = (orderId: string) => {
+    setDirectUploadOrderId(orderId);
+    if (directReceiptInputRef.current) {
+      directReceiptInputRef.current.value = '';
+      directReceiptInputRef.current.click();
+    }
+  };
+
+  // Handle 1-Click Direct Receipt Upload & Save directly to Firestore
+  const handleDirectReceiptFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const targetOrderId = directUploadOrderId;
+    e.target.value = '';
+    if (!file || !targetOrderId) return;
+
+    const targetOrder = orders.find((o) => o.id === targetOrderId);
+    if (!targetOrder) return;
+
+    setUploadingOrderId(targetOrderId);
+    try {
+      const compressedDataUrl = await compressReceiptImage(file);
+      const nextPaymentStatus =
+        targetOrder.paymentStatus === 'UNPAID' ? 'PAID' : targetOrder.paymentStatus;
+      const nextAmountPaid =
+        nextPaymentStatus === 'PAID'
+          ? targetOrder.totalPrice || inventory.unitPrice || 10000
+          : targetOrder.amountPaid;
+
+      const updatedOrder: StudentPoloOrder = {
+        ...targetOrder,
+        receiptUrl: compressedDataUrl,
+        paymentStatus: nextPaymentStatus,
+        amountPaid: nextAmountPaid,
+      };
+
+      setOrders((prev) => prev.map((o) => (o.id === targetOrderId ? updatedOrder : o)));
+      await dataService.updatePoloOrder(updatedOrder);
+
+      if (selectedReceiptPreview && selectedReceiptPreview.orderId === targetOrderId) {
+        setSelectedReceiptPreview({
+          ...selectedReceiptPreview,
+          url: compressedDataUrl,
+        });
+      }
+
+      setRestockToast(
+        `Reçu rattaché avec succès pour ${targetOrder.firstName} ${targetOrder.lastName} !`
+      );
+      setTimeout(() => setRestockToast(null), 4000);
+    } catch (err: any) {
+      console.error('Erreur ajout direct reçu:', err);
+    } finally {
+      setUploadingOrderId(null);
+      setDirectUploadOrderId(null);
+    }
+  };
+
+  // Remove receipt directly from preview modal
+  const handleRemoveReceiptFromOrder = async (orderId: string) => {
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (!targetOrder) return;
+    const updatedOrder: StudentPoloOrder = {
+      ...targetOrder,
+      receiptUrl: '',
+    };
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
+    setSelectedReceiptPreview(null);
+    await dataService.updatePoloOrder(updatedOrder);
+    setRestockToast(
+      `Reçu retiré pour ${targetOrder.firstName} ${targetOrder.lastName}.`
+    );
+    setTimeout(() => setRestockToast(null), 3500);
   };
 
   // Keep payment amount synced when paymentStatus radio changes
@@ -1803,11 +1923,17 @@ const AdminPolos: React.FC = () => {
                           </td>
 
                           <td className="py-3 px-3 text-center">
-                            {order.receiptUrl ? (
+                            {uploadingOrderId === order.id ? (
+                              <span className="px-2.5 py-1 rounded-lg bg-rose-50 text-bde-rose border border-rose-200 dark:bg-rose-950/60 dark:border-rose-800 inline-flex items-center gap-1.5 font-semibold text-[11px] whitespace-nowrap">
+                                <span className="w-3 h-3 border-2 border-bde-rose border-t-transparent rounded-full animate-spin" />
+                                <span>Envoi...</span>
+                              </span>
+                            ) : order.receiptUrl ? (
                               <button
                                 type="button"
                                 onClick={() =>
                                   setSelectedReceiptPreview({
+                                    orderId: order.id,
                                     studentName: `${order.lastName.toUpperCase()} ${order.firstName}`,
                                     url: order.receiptUrl!,
                                   })
@@ -1821,12 +1947,12 @@ const AdminPolos: React.FC = () => {
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => openEditModal(order)}
-                                className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-bde-rose border border-slate-200 hover:border-rose-200 dark:bg-slate-800/70 dark:hover:bg-rose-950/40 dark:text-slate-400 dark:hover:text-rose-300 dark:border-slate-700 transition-colors inline-flex items-center gap-1 font-medium text-[11px] whitespace-nowrap"
-                                title="Rattacher une photo de reçu pour cet étudiant"
+                                onClick={() => triggerDirectReceiptUpload(order.id)}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-bde-rose border border-slate-200 hover:border-rose-200 dark:bg-slate-800/80 dark:hover:bg-rose-950/40 dark:text-slate-300 dark:hover:text-rose-300 dark:border-slate-700 transition-colors inline-flex items-center gap-1 font-semibold text-[11px] whitespace-nowrap"
+                                title="Importer directement la photo du reçu pour cet étudiant"
                               >
                                 <Upload size={11} />
-                                <span>+ Reçu</span>
+                                <span>+ Ajouter reçu</span>
                               </button>
                             )}
                           </td>
@@ -1858,15 +1984,6 @@ const AdminPolos: React.FC = () => {
 
                           <td className="py-3 px-4 text-right">
                             <div className="inline-flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => openEditModal(order)}
-                                className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-bde-rose dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-800/60 transition-all active:scale-95"
-                                title="Modifier la fiche ou rattacher un reçu"
-                              >
-                                <Edit2 size={15} />
-                              </button>
-
                               {deleteConfirmId === order.id ? (
                                 <div className="inline-flex items-center gap-1 bg-rose-50 dark:bg-rose-950/60 px-2 py-1 rounded-lg border border-rose-200 dark:border-rose-800">
                                   <button
@@ -1907,10 +2024,19 @@ const AdminPolos: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal 1: Add / Edit Student Polo Order (Multi-Polos & Multi-Tailles) - Fully Responsive max-h-[92vh] */}
+      {/* Hidden File Input for 1-Click Direct Receipt Attachment in Student Table */}
+      <input
+        ref={directReceiptInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleDirectReceiptFileChange}
+        className="hidden"
+      />
+
+      {/* Modal 1: Add / Edit Student Polo Order (Multi-Polos & Multi-Tailles) - Zero backdrop-blur for 60fps smooth scroll */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden">
-          <div className="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-slate-950/85 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
             {/* Sticky Header */}
             <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-[#131b2e] z-10">
               <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -1932,7 +2058,7 @@ const AdminPolos: React.FC = () => {
             </div>
 
             {/* Scrollable Form Body */}
-            <form id="student-polo-form" onSubmit={handleSaveStudentOrder} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs">
+            <form id="student-polo-form" onSubmit={handleSaveStudentOrder} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-3.5 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -2253,6 +2379,7 @@ const AdminPolos: React.FC = () => {
                           alt="Aperçu du reçu"
                           onClick={() =>
                             setSelectedReceiptPreview({
+                              orderId: editingOrder?.id || '',
                               studentName: `${lastName.toUpperCase() || 'ÉTUDIANT'} ${firstName}`,
                               url: receiptUrl,
                             })
@@ -2274,6 +2401,7 @@ const AdminPolos: React.FC = () => {
                           type="button"
                           onClick={() =>
                             setSelectedReceiptPreview({
+                              orderId: editingOrder?.id || '',
                               studentName: `${lastName.toUpperCase() || 'ÉTUDIANT'} ${firstName}`,
                               url: receiptUrl,
                             })
@@ -2397,10 +2525,10 @@ const AdminPolos: React.FC = () => {
         </div>
       )}
 
-      {/* Modal 2: Configure Full Initial Stock & Parameters - Fully Responsive max-h-[92vh] */}
+      {/* Modal 2: Configure Full Initial Stock & Parameters - Zero backdrop-blur for 60fps smooth scroll */}
       {isStockModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden">
-          <div className="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-slate-950/85 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="bg-white dark:bg-[#131b2e] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
             {/* Sticky Header */}
             <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-[#131b2e] z-10">
               <div>
@@ -2422,7 +2550,7 @@ const AdminPolos: React.FC = () => {
             </div>
 
             {/* Scrollable Body */}
-            <form id="stock-modal-form" onSubmit={handleSaveStockModal} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
+            <form id="stock-modal-form" onSubmit={handleSaveStockModal} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -2526,46 +2654,68 @@ const AdminPolos: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Modal Aperçu Reçu de Paiement */}
+      {/* Modal Aperçu Reçu de Paiement (Zero backdrop-blur for instant 60fps performance) */}
       {selectedReceiptPreview && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-950/90">
           <div className="relative w-full max-w-xl bg-white dark:bg-[#131b2e] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <FileCheck2 size={18} className="text-emerald-600" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileCheck2 size={18} className="text-emerald-600 shrink-0" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
                   Reçu de paiement : {selectedReceiptPreview.studentName}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedReceiptPreview(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-slate-950/20">
+            <div className="p-4 overflow-auto overscroll-contain flex-1 flex items-center justify-center bg-slate-950/20">
               <img
                 src={selectedReceiptPreview.url}
                 alt={`Reçu de paiement - ${selectedReceiptPreview.studentName}`}
-                className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg shadow-md"
+                className="max-h-[68vh] w-auto max-w-full object-contain rounded-lg shadow-md"
               />
             </div>
 
-            <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50 dark:bg-slate-900/60">
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0 bg-slate-50 dark:bg-slate-900/60">
               <span className="text-[11px] text-slate-500">
                 Justificatif de paiement rattaché à la commande
               </span>
-              <a
-                href={selectedReceiptPreview.url}
-                download={`Recu_${selectedReceiptPreview.studentName.replace(/\s+/g, '_')}.jpg`}
-                className="px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs inline-flex items-center gap-1.5 hover:opacity-90 transition-opacity"
-              >
-                <Download size={13} />
-                <span>Télécharger</span>
-              </a>
+              <div className="flex items-center gap-2">
+                {selectedReceiptPreview.orderId && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => triggerDirectReceiptUpload(selectedReceiptPreview.orderId)}
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs inline-flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      <Upload size={13} />
+                      <span>Changer</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveReceiptFromOrder(selectedReceiptPreview.orderId)}
+                      className="px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 font-semibold text-xs inline-flex items-center gap-1 hover:bg-rose-100 transition-colors"
+                      title="Supprimer ce reçu"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </>
+                )}
+                <a
+                  href={selectedReceiptPreview.url}
+                  download={`Recu_${selectedReceiptPreview.studentName.replace(/\s+/g, '_')}.jpg`}
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs inline-flex items-center gap-1.5 hover:opacity-90 transition-opacity"
+                >
+                  <Download size={13} />
+                  <span>Télécharger</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
