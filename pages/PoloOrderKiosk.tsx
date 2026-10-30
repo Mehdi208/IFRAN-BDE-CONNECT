@@ -25,6 +25,8 @@ import {
   Building2,
   ChevronRight,
   ShieldCheck,
+  CreditCard,
+  FileCheck2,
 } from 'lucide-react';
 
 const POLO_SIZES: PoloSize[] = ['S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -53,6 +55,7 @@ const PoloOrderKiosk: React.FC = () => {
   const [firstName, setFirstName] = useState('');
   const [studentClass, setStudentClass] = useState<string>('B1 Dev');
   const [phone, setPhone] = useState('');
+  const [hasAlreadyPaid, setHasAlreadyPaid] = useState<boolean>(false);
   const [selectedQuantities, setSelectedQuantities] = useState<Record<PoloSize, number>>({
     S: 0,
     M: 1,
@@ -101,11 +104,6 @@ const PoloOrderKiosk: React.FC = () => {
     return () => clearInterval(interval);
   }, [confirmedOrder]);
 
-  // Automatically determine polo color from selected class
-  const selectedColor = useMemo<PoloColorYear>(() => {
-    return getColorFromClass(studentClass);
-  }, [studentClass]);
-
   // Adjust size quantity
   const handleQuantityDelta = (sz: PoloSize, delta: number) => {
     const current = selectedQuantities[sz] || 0;
@@ -131,6 +129,7 @@ const PoloOrderKiosk: React.FC = () => {
     setFirstName('');
     setStudentClass('B1 Dev');
     setPhone('');
+    setHasAlreadyPaid(false);
     setSelectedQuantities({
       S: 0,
       M: 1,
@@ -177,6 +176,15 @@ const PoloOrderKiosk: React.FC = () => {
       const primarySize: PoloSize = items[0]?.size || 'M';
       const todayIso = new Date().toISOString().split('T')[0];
 
+      const paymentNote = hasAlreadyPaid
+        ? 'Déjà payé (Reçu à présenter au Bureau Marketing)'
+        : 'Non payé (Paiement à effectuer)';
+
+      const noteParts: string[] = [];
+      if (phone.trim()) noteParts.push(`Tél: ${phone.trim()}`);
+      noteParts.push(paymentNote);
+      if (notes.trim()) noteParts.push(notes.trim());
+
       const payload: Omit<StudentPoloOrder, 'id'> = {
         lastName: cleanLastName,
         firstName: cleanFirstName,
@@ -187,15 +195,11 @@ const PoloOrderKiosk: React.FC = () => {
         quantity: totalPoloCount,
         items,
         date: todayIso,
-        paymentStatus: 'UNPAID',
-        amountPaid: 0,
+        paymentStatus: hasAlreadyPaid ? 'PAID' : 'UNPAID',
+        amountPaid: hasAlreadyPaid ? totalPrice : 0,
         totalPrice: totalPrice,
         deliveryStatus: 'PENDING_STOCK',
-        notes: notes.trim()
-          ? `${phone ? 'Tél: ' + phone.trim() + ' • ' : ''}${notes.trim()}`
-          : phone.trim()
-          ? `Tél: ${phone.trim()}`
-          : '',
+        notes: noteParts.join(' • '),
       };
 
       const updatedList = await dataService.addPoloOrder(payload);
@@ -293,6 +297,18 @@ const PoloOrderKiosk: React.FC = () => {
                       <span className="font-bold text-slate-800">{confirmedOrder.phone}</span>
                     </div>
                   )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Statut de paiement :</span>
+                    <span
+                      className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
+                        confirmedOrder.paymentStatus === 'PAID'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}
+                    >
+                      {confirmedOrder.paymentStatus === 'PAID' ? 'Déjà Payé' : 'À Régler'}
+                    </span>
+                  </div>
                   <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-sm">
                     <span className="font-sans text-slate-600">Articles :</span>
                     <span className="font-bold text-slate-900">
@@ -302,7 +318,7 @@ const PoloOrderKiosk: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm pt-1">
-                    <span className="font-sans font-semibold text-slate-600">Total à régler :</span>
+                    <span className="font-sans font-semibold text-slate-600">Total :</span>
                     <span className="font-black text-bde-rose text-base">
                       {formatCurrencyDots(confirmedOrder.totalPrice)}
                     </span>
@@ -310,38 +326,79 @@ const PoloOrderKiosk: React.FC = () => {
                 </div>
               </div>
 
-              {/* Instructions Card */}
+              {/* Instructions Card Dynamique selon paiement */}
               <div className="p-5 rounded-3xl border bg-white border-slate-200 text-slate-700 space-y-3.5 text-xs shadow-sm">
                 <div className="flex items-center gap-2.5 font-bold text-slate-900">
                   <Building2 size={17} className="text-bde-rose" />
-                  <span>Comment régler et récupérer votre Polo ?</span>
+                  <span>
+                    {confirmedOrder.paymentStatus === 'PAID'
+                      ? 'Comment récupérer votre polo déjà payé ?'
+                      : 'Comment régler et récupérer votre polo ?'}
+                  </span>
                 </div>
-                <div className="space-y-2 leading-relaxed text-slate-600">
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-5 h-5 rounded-full bg-rose-500/20 text-bde-rose font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                      1
+
+                {confirmedOrder.paymentStatus === 'PAID' ? (
+                  <div className="space-y-2.5 leading-relaxed text-slate-600">
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2.5">
+                      <FileCheck2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="block text-emerald-950 font-bold">Conservez précieusement votre reçu !</strong>
+                        Présentez votre reçu de paiement lors du retrait au Bureau Marketing.
+                      </div>
                     </div>
-                    <div>
-                      Rendez-vous au <strong className="text-slate-900">Bureau du BDE (RDC du campus)</strong> aux heures de permanence.
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-rose-500/20 text-bde-rose font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                        1
+                      </div>
+                      <div>
+                        Dès l'annonce de l'arrivée de la nouvelle vague de polos, rendez-vous au <strong className="text-slate-900">Bureau Marketing</strong>.
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-rose-500/20 text-bde-rose font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                        2
+                      </div>
+                      <div>
+                        Présentez votre <strong className="text-slate-900">reçu de paiement</strong> ainsi que votre nom pour vérification immédiate.
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-rose-500/20 text-bde-rose font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                        3
+                      </div>
+                      <div>
+                        Votre polo vous sera remis en priorité sans aucun frais supplémentaire !
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-5 h-5 rounded-full bg-rose-500/20 text-bde-rose font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                      2
+                ) : (
+                  <div className="space-y-2 leading-relaxed text-slate-600">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-rose-500/20 text-bde-rose font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                        1
+                      </div>
+                      <div>
+                        Rendez-vous au <strong className="text-slate-900">Bureau du BDE / Bureau Marketing (RDC du campus)</strong> aux heures de permanence.
+                      </div>
                     </div>
-                    <div>
-                      Réglez votre commande en <strong className="text-slate-900">Espèces</strong>, par <strong className="text-slate-900">Wave</strong> ou <strong className="text-slate-900">Orange Money</strong> en indiquant votre nom.
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-rose-500/20 text-bde-rose font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                        2
+                      </div>
+                      <div>
+                        Réglez votre commande en <strong className="text-slate-900">Espèces</strong>, par <strong className="text-slate-900">Wave</strong> ou <strong className="text-slate-900">Orange Money</strong> en indiquant votre nom, et conservez votre reçu.
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-full bg-rose-500/20 text-bde-rose font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                        3
+                      </div>
+                      <div>
+                        Si votre taille est en stock, elle vous est <strong className="text-slate-900">remise immédiatement</strong>. Sinon, elle sera prioritaire sur la livraison fournisseur !
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-5 h-5 rounded-full bg-rose-500/20 text-bde-rose font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                      3
-                    </div>
-                    <div>
-                      Si votre taille est en stock, elle vous est <strong className="text-slate-900">remise immédiatement</strong>. Sinon, elle sera prioritaire sur la prochaine commande fournisseur !
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Auto-Reset Countdown Bar */}
@@ -538,6 +595,81 @@ const PoloOrderKiosk: React.FC = () => {
                 </div>
               </div>
 
+              {/* STEP 3: STATUT DE PAIEMENT */}
+              <div className="p-4 rounded-2xl border bg-white border-slate-200 space-y-3.5 shadow-sm">
+                <div className="flex items-center gap-2 text-xs font-bold border-b pb-2 text-slate-900 border-slate-200">
+                  <CreditCard size={15} className="text-bde-rose" />
+                  <span>Étape 3 : Avez-vous déjà payé votre polo ?</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setHasAlreadyPaid(true)}
+                    className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 active:scale-98 ${
+                      hasAlreadyPaid
+                        ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500 shadow-sm'
+                        : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                        hasAlreadyPaid
+                          ? 'border-emerald-600 bg-emerald-600 text-white'
+                          : 'border-slate-300 bg-white'
+                      }`}
+                    >
+                      {hasAlreadyPaid && <span className="text-[10px] font-black">✓</span>}
+                    </div>
+                    <div>
+                      <div className="text-xs font-black text-slate-900">
+                        Oui, j'ai déjà payé
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        J'ai mon reçu de paiement (Wave, OM, espèces ou scolarité).
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHasAlreadyPaid(false)}
+                    className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 active:scale-98 ${
+                      !hasAlreadyPaid
+                        ? 'border-bde-rose bg-rose-50/80 ring-2 ring-bde-rose shadow-sm'
+                        : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                        !hasAlreadyPaid
+                          ? 'border-bde-rose bg-bde-rose text-white'
+                          : 'border-slate-300 bg-white'
+                      }`}
+                    >
+                      {!hasAlreadyPaid && <span className="text-[10px] font-black">✓</span>}
+                    </div>
+                    <div>
+                      <div className="text-xs font-black text-slate-900">
+                        Non, pas encore payé
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Je réglerai au Bureau du BDE / Marketing lors du retrait.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+
+                {hasAlreadyPaid && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
+                    <FileCheck2 size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Rappel important :</strong> Veuillez bien conserver votre <strong>reçu de paiement</strong>. Vous devrez obligatoirement le présenter au <strong>Bureau Marketing</strong> dès réception des polos pour récupérer votre commande.
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {/* RECAP & VALIDATION */}
               <div className="p-4 rounded-2xl border bg-white border-slate-200 space-y-3 shadow-md">
                 <div className="flex items-center justify-between text-xs">
@@ -552,9 +684,22 @@ const PoloOrderKiosk: React.FC = () => {
                   <span className="font-mono text-slate-700">{formatCurrencyDots(unitPrice)}</span>
                 </div>
 
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-600">Statut de paiement :</span>
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
+                      hasAlreadyPaid
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        : 'bg-amber-100 text-amber-800 border border-amber-200'
+                    }`}
+                  >
+                    {hasAlreadyPaid ? 'Déjà Payé' : 'À Régler'}
+                  </span>
+                </div>
+
                 <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                   <span className="text-sm font-extrabold text-slate-900">
-                    Montant total à régler :
+                    {hasAlreadyPaid ? 'Montant payé déclaré :' : 'Montant total à régler :'}
                   </span>
                   <span className="text-xl font-black text-bde-rose font-mono">
                     {formatCurrencyDots(totalPrice)}
