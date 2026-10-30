@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Calendar, Users, GraduationCap, UserPlus, Utensils, Image as ImageIcon, Palmtree } from 'lucide-react';
+import { Menu, X, Calendar, Users, GraduationCap, UserPlus, Utensils, Image as ImageIcon, Shirt } from 'lucide-react';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,6 +10,7 @@ const Navbar = () => {
 
   const links = [
     { path: '/', label: 'Accueil', icon: null },
+    { path: '/polos', label: 'Polos', icon: Shirt },
     { path: '/calendar', label: 'Agenda', icon: Calendar },
     { path: '/clubs', label: 'Clubs', icon: Users },
     { path: '/gallery', label: 'Galerie', icon: ImageIcon },

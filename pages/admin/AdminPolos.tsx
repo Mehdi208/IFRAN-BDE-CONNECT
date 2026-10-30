@@ -706,7 +706,8 @@ const AdminPolos: React.FC = () => {
           o.firstName.toLowerCase().includes(q) ||
           `${o.lastName} ${o.firstName}`.toLowerCase().includes(q) ||
           `${o.firstName} ${o.lastName}`.toLowerCase().includes(q) ||
-          o.studentClass.toLowerCase().includes(q);
+          o.studentClass.toLowerCase().includes(q) ||
+          (o.phone && o.phone.toLowerCase().includes(q));
         if (!matchName) return false;
       }
       if (filterColor !== 'ALL' && o.poloType !== filterColor) return false;
@@ -1506,6 +1507,11 @@ const AdminPolos: React.FC = () => {
                             <div className="font-bold text-slate-900 dark:text-white">
                               {order.lastName.toUpperCase()} {order.firstName}
                             </div>
+                            {order.phone && (
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                                Tél: {order.phone}
+                              </div>
+                            )}
                             {order.notes && (
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                                 {order.notes}

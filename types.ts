@@ -253,6 +253,7 @@ export interface StudentPoloOrder {
   lastName: string;
   firstName: string;
   studentClass: string;
+  phone?: string;
   poloType: PoloColorYear;
   size: PoloSize;
   quantity?: number;

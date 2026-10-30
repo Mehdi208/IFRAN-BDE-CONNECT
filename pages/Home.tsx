@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { ArrowRight, Star, Heart, Zap } from 'lucide-react';
+import { ArrowRight, Star, Heart, Zap, Shirt } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Home = () => {
@@ -58,13 +58,18 @@ const Home = () => {
           {/* Correction : Séparation des animations pour éviter le conflit d'opacité */}
           <div className="w-full animate-fade-in-up opacity-0" style={{ animationDelay: '0.6s' }}>
              {/* Changement ici: animate-float-delayed au lieu de animate-float-slow pour synchroniser avec le texte */}
-             <div className="flex flex-col sm:flex-row gap-5 justify-center items-center w-full animate-float-delayed">
-                <Link to="/calendar" className="group relative overflow-hidden bg-bde-rose hover:bg-rose-600 text-white px-8 py-4 rounded-full font-bold text-lg transition-all shadow-lg shadow-rose-500/30 flex items-center justify-center gap-2 hover:scale-105 transform hover:-translate-y-1">
+             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full animate-float-delayed">
+                <Link to="/polos" className="group relative overflow-hidden bg-bde-rose hover:bg-rose-600 text-white px-7 py-3.5 rounded-full font-bold text-base transition-all shadow-lg shadow-rose-500/30 flex items-center justify-center gap-2 hover:scale-105 transform hover:-translate-y-1">
                     <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:animate-shine"></div>
-                    <span>Voir l'Agenda</span> <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                    <Shirt size={20} className="animate-pulse" />
+                    <span>Commander mon Polo</span>
+                </Link>
+
+                <Link to="/calendar" className="group bg-white/10 hover:bg-white/20 text-white px-7 py-3.5 rounded-full font-bold text-base transition-all backdrop-blur-md hover:scale-105 transform hover:-translate-y-1 border border-white/20 hover:border-white/40 flex items-center gap-2">
+                    <span>Voir l'Agenda</span> <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
                 
-                <Link to="/clubs" className="group bg-white/10 hover:bg-white/20 text-white px-8 py-4 rounded-full font-bold text-lg transition-all backdrop-blur-md hover:scale-105 transform hover:-translate-y-1 border border-white/20 hover:border-white/40">
+                <Link to="/clubs" className="group bg-white/5 hover:bg-white/15 text-white px-7 py-3.5 rounded-full font-bold text-base transition-all backdrop-blur-md hover:scale-105 transform hover:-translate-y-1 border border-white/10 hover:border-white/30">
                     Découvrir les Clubs
                 </Link>
              </div>

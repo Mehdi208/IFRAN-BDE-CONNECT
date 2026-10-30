@@ -10,6 +10,7 @@ import Canteen from './pages/Canteen';
 import Tutoring from './pages/Tutoring';
 import Team from './pages/Team';
 import Login from './pages/Login';
+import PoloOrderKiosk from './pages/PoloOrderKiosk';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -45,6 +46,9 @@ function App() {
       <PwaInstallPrompt />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/polos" element={<PoloOrderKiosk />} />
+        <Route path="/commande-polo" element={<PoloOrderKiosk />} />
+        <Route path="/borne-polos" element={<PoloOrderKiosk />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/clubs" element={<Clubs />} />
         <Route path="/gallery" element={<Gallery />} />
