@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { dataService } from '../../services/dataService';
 import {
@@ -36,6 +36,8 @@ import {
   Eye,
   FileCheck2,
   Image as ImageIcon,
+  Upload,
+  Phone,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -99,22 +101,114 @@ const formatCurrencyDots = (val: number): string => {
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.')} FCFA`;
 };
 
-// High-contrast custom tooltip for Payment Donut Chart
+// High-readability image compression for receipts attached by Admin (<120 KB JPEG for Firestore)
+const compressReceiptImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) {
+      reject(new Error("Le fichier sélectionné n'est pas une image valide."));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Erreur lors de la lecture du fichier.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Impossible de décoder l'image."));
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const MAX_DIM = 1000;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Impossible de préparer le canvas de compression.'));
+            return;
+          }
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+// Double-Bezel Ethereal Glassmorphism Tooltip for Payment Donut Chart
 const PaymentDonutTooltip = ({ active, payload, totalStudents }: any) => {
   if (active && payload && payload.length) {
     const item = payload[0];
-    const color = item.payload?.color || '#3b82f6';
+    const color = item.payload?.color || '#10b981';
     const name = item.name || '';
     const value = item.value || 0;
     const pct = totalStudents > 0 ? Math.round((Number(value) / totalStudents) * 100) : 0;
     return (
-      <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-700 shadow-2xl text-xs space-y-1 pointer-events-none">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-          <span className="font-bold text-slate-100">{name}</span>
-        </div>
-        <div className="font-mono text-emerald-400 font-extrabold text-sm">
-          {value} étudiant(s) <span className="text-slate-400 text-xs font-normal">({pct}%)</span>
+      <div
+        className="p-1.5 rounded-2xl pointer-events-none select-none"
+        style={{
+          backgroundColor: 'rgba(15, 23, 42, 0.78)',
+          backdropFilter: 'blur(20px) saturate(190%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(190%)',
+          border: '1px solid rgba(255, 255, 255, 0.18)',
+          boxShadow: '0 22px 48px -8px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(15, 23, 42, 0.5)',
+        }}
+      >
+        <div
+          className="px-3.5 py-2.5 rounded-xl space-y-1.5 min-w-[175px]"
+          style={{
+            background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.94) 0%, rgba(2, 6, 23, 0.96) 100%)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.16)',
+          }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{
+                  backgroundColor: color,
+                  boxShadow: `0 0 10px ${color}`,
+                }}
+              />
+              <span className="font-bold text-white text-xs tracking-tight">{name}</span>
+            </div>
+            <span
+              className="font-mono tabular-nums text-[11px] font-extrabold px-2 py-0.5 rounded-full text-white"
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                border: '1px solid rgba(255, 255, 255, 0.14)',
+              }}
+            >
+              {pct}%
+            </span>
+          </div>
+          <div className="pt-1 border-t border-white/10 flex items-baseline justify-between gap-2">
+            <span className="text-[11px] text-slate-300 font-medium">Effectif :</span>
+            <span className="font-mono tabular-nums text-emerald-400 font-extrabold text-sm">
+              {value} étudiant{Number(value) > 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -122,21 +216,49 @@ const PaymentDonutTooltip = ({ active, payload, totalStudents }: any) => {
   return null;
 };
 
-// High-contrast custom tooltip for Stock Bar Chart
+// Double-Bezel Ethereal Glassmorphism Tooltip for Stock Bar Chart
 const StockBarChartTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-700 shadow-2xl text-xs space-y-1.5 pointer-events-none">
-        <div className="font-bold text-slate-200 border-b border-slate-800 pb-1">{label}</div>
-        {payload.map((entry: any, i: number) => (
-          <div key={`entry-${i}`} className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-              <span className="text-slate-300">{entry.name} :</span>
-            </div>
-            <span className="font-mono font-bold text-white">{entry.value} polo(s)</span>
+      <div
+        className="p-1.5 rounded-2xl pointer-events-none select-none"
+        style={{
+          backgroundColor: 'rgba(15, 23, 42, 0.78)',
+          backdropFilter: 'blur(20px) saturate(190%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(190%)',
+          border: '1px solid rgba(255, 255, 255, 0.18)',
+          boxShadow: '0 22px 48px -8px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(15, 23, 42, 0.5)',
+        }}
+      >
+        <div
+          className="px-3.5 py-2.5 rounded-xl space-y-1.5 min-w-[195px]"
+          style={{
+            background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.94) 0%, rgba(2, 6, 23, 0.96) 100%)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.16)',
+          }}
+        >
+          <div className="font-extrabold text-white text-xs border-b border-white/10 pb-1.5 tracking-tight">
+            {label}
           </div>
-        ))}
+          {payload.map((entry: any, i: number) => (
+            <div key={`entry-${i}`} className="flex items-center justify-between gap-4 text-xs">
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{
+                    backgroundColor: entry.color,
+                    boxShadow: `0 0 8px ${entry.color}`,
+                  }}
+                />
+                <span className="text-slate-200 font-medium">{entry.name} :</span>
+              </div>
+              <span className="font-mono tabular-nums font-extrabold text-white">
+                {entry.value} polo{Number(entry.value) > 1 ? 's' : ''}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -163,6 +285,7 @@ const AdminPolos: React.FC = () => {
   const [lastName, setLastName] = useState('');
   const [firstName, setFirstName] = useState('');
   const [studentClass, setStudentClass] = useState('B1 Créa');
+  const [phone, setPhone] = useState('');
   const [poloType, setPoloType] = useState<PoloColorYear>('BLANC_1A');
   const [selectedQuantities, setSelectedQuantities] = useState<Record<PoloSize, number>>({
     S: 0,
@@ -177,7 +300,11 @@ const AdminPolos: React.FC = () => {
   const [amountPaid, setAmountPaid] = useState<number>(10000);
   const [totalPrice, setTotalPrice] = useState<number>(10000);
   const [deliveryStatus, setDeliveryStatus] = useState<'DELIVERED' | 'PENDING_STOCK'>('DELIVERED');
+  const [notes, setNotes] = useState<string>('');
   const [receiptUrl, setReceiptUrl] = useState<string>('');
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState<boolean>(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
   const [selectedReceiptPreview, setSelectedReceiptPreview] = useState<{
     studentName: string;
     url: string;
@@ -539,6 +666,7 @@ const AdminPolos: React.FC = () => {
     setLastName('');
     setFirstName('');
     setStudentClass('B1 Créa');
+    setPhone('');
     setPoloType('BLANC_1A');
     setSelectedQuantities({
       S: 0,
@@ -557,16 +685,18 @@ const AdminPolos: React.FC = () => {
     setDeliveryStatus(availForM > 0 ? 'DELIVERED' : 'PENDING_STOCK');
     setNotes('');
     setReceiptUrl('');
+    setReceiptError(null);
     setIsModalOpen(true);
   };
 
   // Open Modal to Edit Existing Student Polo
   const openEditModal = (order: StudentPoloOrder) => {
     setEditingOrder(order);
-    setLastName(order.lastName);
-    setFirstName(order.firstName);
-    setStudentClass(order.studentClass);
-    setPoloType(order.poloType);
+    setLastName(order.lastName || '');
+    setFirstName(order.firstName || '');
+    setStudentClass(order.studentClass || 'B1 Créa');
+    setPhone(order.phone || '');
+    setPoloType(order.poloType || 'BLANC_1A');
 
     const initialQ: Record<PoloSize, number> = {
       S: 0,
@@ -585,14 +715,43 @@ const AdminPolos: React.FC = () => {
     }
     setSelectedQuantities(initialQ);
 
-    setDate(order.date);
-    setPaymentStatus(order.paymentStatus);
-    setAmountPaid(order.amountPaid);
+    const cleanDate =
+      order.date && order.date.includes('T')
+        ? order.date.split('T')[0]
+        : order.date || new Date().toISOString().split('T')[0];
+    setDate(cleanDate);
+    setPaymentStatus(order.paymentStatus || 'UNPAID');
+    setAmountPaid(order.amountPaid ?? 0);
     setTotalPrice(order.totalPrice || inventory.unitPrice || 10000);
-    setDeliveryStatus(order.deliveryStatus);
+    setDeliveryStatus(order.deliveryStatus || 'PENDING_STOCK');
     setNotes(order.notes || '');
     setReceiptUrl(order.receiptUrl || '');
+    setReceiptError(null);
     setIsModalOpen(true);
+  };
+
+  // Handle Admin Receipt Image Upload & Compression
+  const handleReceiptFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReceiptError(null);
+    setIsUploadingReceipt(true);
+    try {
+      const compressedDataUrl = await compressReceiptImage(file);
+      setReceiptUrl(compressedDataUrl);
+      // Automatically mark as PAID if it was UNPAID when attaching a receipt
+      if (paymentStatus === 'UNPAID') {
+        setPaymentStatus('PAID');
+        setAmountPaid(totalPrice);
+      }
+    } catch (err: any) {
+      setReceiptError(
+        err?.message || "Impossible de traiter cette image. Essayez un fichier JPG ou PNG."
+      );
+    } finally {
+      setIsUploadingReceipt(false);
+      e.target.value = '';
+    }
   };
 
   // Keep payment amount synced when paymentStatus radio changes
@@ -630,21 +789,31 @@ const AdminPolos: React.FC = () => {
         ? 0
         : Math.min(totalPrice, Math.max(0, Number(amountPaid) || 0));
 
+    // Preserve original timestamp if date day was not changed during edit
+    const finalDate =
+      editingOrder &&
+      editingOrder.date &&
+      editingOrder.date.includes('T') &&
+      editingOrder.date.startsWith(date)
+        ? editingOrder.date
+        : date;
+
     const payload: Omit<StudentPoloOrder, 'id'> = {
       lastName: lastName.trim(),
       firstName: firstName.trim(),
       studentClass: studentClass.trim() || 'Non précisée',
+      phone: phone.trim(),
       poloType,
       size: primarySize,
       quantity: effectiveQty,
       items,
-      date,
+      date: finalDate,
       paymentStatus,
       amountPaid: cleanAmountPaid,
       totalPrice: Number(totalPrice) || (inventory.unitPrice || 10000),
       deliveryStatus,
       notes: notes.trim(),
-      receiptUrl: receiptUrl.trim() || undefined,
+      receiptUrl: receiptUrl.trim(),
     };
 
     let updatedList: StudentPoloOrder[];
@@ -1003,7 +1172,11 @@ const AdminPolos: React.FC = () => {
                     tickLine={false}
                     allowDecimals={false}
                   />
-                  <Tooltip content={<StockBarChartTooltip />} />
+                  <Tooltip
+                    content={<StockBarChartTooltip />}
+                    cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
+                    wrapperStyle={{ zIndex: 100, pointerEvents: 'none', outline: 'none' }}
+                  />
                   <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
                   <Bar
                     dataKey="Remis"
@@ -1049,7 +1222,17 @@ const AdminPolos: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-4 my-auto">
               <div className="h-56 w-full relative flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+                {/* Center Metric Label placed underneath (z-0) so the Glassmorphism Tooltip (z-100) cleanly floats above it */}
+                <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                  <span className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+                    {paymentChartData.paidPct}%
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Soldé (Payé)
+                  </span>
+                </div>
+
+                <ResponsiveContainer width="100%" height="100%" className="relative z-20">
                   <PieChart>
                     <Pie
                       data={paymentChartData.displaySegments}
@@ -1067,6 +1250,7 @@ const AdminPolos: React.FC = () => {
                     </Pie>
                     {paymentChartData.hasData && (
                       <Tooltip
+                        wrapperStyle={{ zIndex: 100, pointerEvents: 'none', outline: 'none' }}
                         content={
                           <PaymentDonutTooltip totalStudents={paymentChartData.totalStudents} />
                         }
@@ -1074,15 +1258,6 @@ const AdminPolos: React.FC = () => {
                     )}
                   </PieChart>
                 </ResponsiveContainer>
-
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-2xl font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
-                    {paymentChartData.paidPct}%
-                  </span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Soldé (Payé)
-                  </span>
-                </div>
               </div>
 
               <div className="space-y-3 text-xs">
@@ -1637,16 +1812,22 @@ const AdminPolos: React.FC = () => {
                                     url: order.receiptUrl!,
                                   })
                                 }
-                                className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:text-emerald-300 dark:border-emerald-800 transition-colors inline-flex items-center gap-1 font-semibold text-[11px]"
+                                className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:text-emerald-300 dark:border-emerald-800 transition-colors inline-flex items-center gap-1 font-semibold text-[11px] whitespace-nowrap"
                                 title="Voir le reçu de paiement"
                               >
                                 <Eye size={12} />
                                 <span>Voir reçu</span>
                               </button>
                             ) : (
-                              <span className="text-[11px] text-slate-400 italic">
-                                Aucun
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(order)}
+                                className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-bde-rose border border-slate-200 hover:border-rose-200 dark:bg-slate-800/70 dark:hover:bg-rose-950/40 dark:text-slate-400 dark:hover:text-rose-300 dark:border-slate-700 transition-colors inline-flex items-center gap-1 font-medium text-[11px] whitespace-nowrap"
+                                title="Rattacher une photo de reçu pour cet étudiant"
+                              >
+                                <Upload size={11} />
+                                <span>+ Reçu</span>
+                              </button>
                             )}
                           </td>
 
@@ -1676,12 +1857,12 @@ const AdminPolos: React.FC = () => {
                           </td>
 
                           <td className="py-3 px-4 text-right">
-                            <div className="inline-flex items-center gap-1">
+                            <div className="inline-flex items-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => openEditModal(order)}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                title="Modifier"
+                                className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-bde-rose dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-800/60 transition-all active:scale-95"
+                                title="Modifier la fiche ou rattacher un reçu"
                               >
                                 <Edit2 size={15} />
                               </button>
@@ -1707,7 +1888,7 @@ const AdminPolos: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => setDeleteConfirmId(order.id)}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors active:scale-95"
                                   title="Supprimer"
                                 >
                                   <Trash2 size={15} />
@@ -1736,7 +1917,7 @@ const AdminPolos: React.FC = () => {
                 <Shirt size={20} className="text-bde-rose shrink-0" />
                 <span className="truncate">
                   {editingOrder
-                    ? "Modifier la commande de Polo"
+                    ? 'Modifier la commande & Rattacher un reçu'
                     : 'Enregistrer la commande de Polo'}
                 </span>
               </h3>
@@ -1782,7 +1963,7 @@ const AdminPolos: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Classe / Filière *
@@ -1807,7 +1988,26 @@ const AdminPolos: React.FC = () => {
 
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Date de commande / prise *
+                    Téléphone / WhatsApp
+                  </label>
+                  <div className="relative">
+                    <Phone
+                      size={13}
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Ex: 07 00 00 00 00"
+                      className="w-full pl-8 pr-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:border-bde-rose"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Date de commande *
                   </label>
                   <input
                     type="date"
@@ -2016,6 +2216,116 @@ const AdminPolos: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                {/* Receipt Upload / Attachment Block inside Edit Modal */}
+                <div className="pt-2.5 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <FileCheck2 size={14} className="text-emerald-600 dark:text-emerald-400" />
+                      <span>Photo du reçu de paiement (Optionnel)</span>
+                    </label>
+                    {receiptUrl && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                        Reçu rattaché
+                      </span>
+                    )}
+                  </div>
+
+                  <input
+                    ref={receiptInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleReceiptFileSelect}
+                    className="hidden"
+                  />
+
+                  {receiptError && (
+                    <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-[11px] font-medium">
+                      {receiptError}
+                    </div>
+                  )}
+
+                  {receiptUrl ? (
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800/70 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={receiptUrl}
+                          alt="Aperçu du reçu"
+                          onClick={() =>
+                            setSelectedReceiptPreview({
+                              studentName: `${lastName.toUpperCase() || 'ÉTUDIANT'} ${firstName}`,
+                              url: receiptUrl,
+                            })
+                          }
+                          className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0 cursor-pointer hover:opacity-85 transition-opacity"
+                        />
+                        <div className="min-w-0">
+                          <div className="font-bold text-emerald-700 dark:text-emerald-300 text-xs truncate">
+                            Justificatif joint à la fiche
+                          </div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Cliquez sur « Enregistrer les modifications » pour sauvegarder.
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedReceiptPreview({
+                              studentName: `${lastName.toUpperCase() || 'ÉTUDIANT'} ${firstName}`,
+                              url: receiptUrl,
+                            })
+                          }
+                          className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                          title="Voir en grand"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => receiptInputRef.current?.click()}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-[11px] transition-colors"
+                          title="Remplacer la photo du reçu"
+                        >
+                          Changer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReceiptUrl('')}
+                          className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-600 dark:text-rose-400 transition-colors"
+                          title="Supprimer le reçu"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => receiptInputRef.current?.click()}
+                      disabled={isUploadingReceipt}
+                      className="w-full py-3 px-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-bde-rose dark:hover:border-bde-rose bg-white dark:bg-slate-800/70 hover:bg-rose-50/40 dark:hover:bg-rose-950/20 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-98"
+                    >
+                      {isUploadingReceipt ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-bde-rose border-t-transparent rounded-full animate-spin" />
+                          <span className="text-bde-rose font-bold">
+                            Compression et chargement du reçu...
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={15} className="text-bde-rose shrink-0" />
+                          <span>
+                            Importer / Rattacher la photo du reçu (envoyée par WhatsApp ou scannée)
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Physical Delivery Status */}
@@ -2218,7 +2528,7 @@ const AdminPolos: React.FC = () => {
       )}
       {/* Modal Aperçu Reçu de Paiement */}
       {selectedReceiptPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-xl bg-white dark:bg-[#131b2e] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
@@ -2246,7 +2556,7 @@ const AdminPolos: React.FC = () => {
 
             <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50 dark:bg-slate-900/60">
               <span className="text-[11px] text-slate-500">
-                Photo fournie par l'étudiant lors de sa réservation en ligne
+                Justificatif de paiement rattaché à la commande
               </span>
               <a
                 href={selectedReceiptPreview.url}
